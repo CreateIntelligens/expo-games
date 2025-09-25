@@ -1,0 +1,48 @@
+# by CSL
+docs/
+
+
+# Python
+a.streamlit/
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+.env
+
+# Byte-compiled / compiled / dynamic libraries
+*.dll
+*.dylib
+*.exe
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+Dockerfile.*
+.dockerignore
+
+# SSL certificates and private keys
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Node / frontend
+node_modules/
+yarn.lock
+package-lock.json
+
+# Misc
+.DS_Store

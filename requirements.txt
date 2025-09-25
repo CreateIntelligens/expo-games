@@ -1,0 +1,20 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+numpy<1.26
+pandas>=2.0.0,<2.2
+opencv-python-headless
+mediapipe
+pillow
+python-dotenv
+pytest
+httpx
+
+# DeepFace + GPU 支援
+tensorflow==2.13.0
+keras==2.13.1
+deepface==0.0.85
+requests>=2.27.1
+gdown>=3.10.1
+tqdm>=4.30.0

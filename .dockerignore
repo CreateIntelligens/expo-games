@@ -1,0 +1,13 @@
+.git
+__pycache__
+*.py[cod]
+*.so
+*.log
+.venv
+.env
+node_modules
+/build
+/tests
+/docs
+.DS_Store
+nginx/ssl/

@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expo Games WebSocket API 文檔</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 0;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 10px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .endpoint-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            background: #f8f9fa;
+            padding: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .endpoint-header:hover {
+            background: #e9ecef;
+        }
+
+        .endpoint-method {
+            background: #6c757d;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .endpoint-url {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .endpoint-description {
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .endpoint-content {
+            display: none;
+            padding: 20px;
+        }
+
+        .endpoint-content.active {
+            display: block;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section h3 {
+            color: #495057;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .message-example {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+
+        .message-type {
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-connected {
+            background: #48bb78;
+        }
+
+        .status-disconnected {
+            background: #f56565;
+        }
+
+        .status-connecting {
+            background: #ed8936;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .test-section {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .test-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #38a169;
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .log-area {
+            background: #1a202c;
+            color: #e2e8f0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            padding: 10px;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .input-group {
+            margin-bottom: 10px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .toggle-arrow {
+            transition: transform 0.2s;
+        }
+
+        .toggle-arrow.active {
+            transform: rotate(90deg);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        .table th, .table td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .table th {
+            background: #f7fafc;
+            font-weight: bold;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .badge-success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .badge-error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .badge-info {
+            background: #bee3f8;
+            color: #2a4365;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .test-controls {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔌 Expo Games WebSocket API</h1>
+            <p>即時雙向通訊協議文檔與測試工具</p>
+        </div>
+
+        <!-- 連接狀態指示器 -->
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <div>
+                    <span class="status-indicator status-disconnected" id="connectionStatus"></span>
+                    <strong>WebSocket 連接狀態</strong>
+                    <div class="endpoint-description">目前連接狀態和控制</div>
+                </div>
+            </div>
+            <div class="endpoint-content">
+                <div class="test-section">
+                    <h4>🔗 連接測試</h4>
+                    <div class="input-group">
+                        <label>WebSocket URL:</label>
+                        <input type="text" id="wsUrl" value="" readonly>
+                    </div>
+                    <div class="test-controls">
+                        <button class="btn btn-primary" id="connectBtn">連接</button>
+                        <button class="btn btn-danger" id="disconnectBtn">斷開</button>
+                        <button class="btn btn-success" id="clearLogBtn">清除日誌</button>
+                    </div>
+                    <div class="log-area" id="logArea">等待連接...\n</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 情緒分析 WebSocket -->
+        <div class="endpoint-card">
+            <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                <div>
+                    <span class="endpoint-method">WS</span>
+                    <span class="endpoint-url">/ws/emotion/stream</span>
+                    <div class="endpoint-description">即時情緒分析串流</div>
+                </div>
+                <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="endpoint-content">
+                <div class="section">
+                    <h3>📋 功能說明</h3>
+                    <p>處理即時攝影機影像串流，進行情緒分析並返回結果。支援心跳機制和自動重連。</p>
+                </div>
+
+                <div class="section">
+                    <h3>📤 客戶端發送訊息</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">影像幀訊息 (Frame Message)</div>
+                        <pre>{
+  "type": "frame",
+  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ...",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">心跳訊息 (Ping Message)</div>
+                        <pre>{
+  "type": "ping"
+}</pre>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>📥 服務器回應訊息</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">分析結果 (Result Message)</div>
+                        <pre>{
+  "type": "result",
+  "emotion_zh": "開心",
+  "emotion_en": "happy",
+  "emoji": "😊",
+  "confidence": 0.95,
+  "timestamp": 1640995200.123,
+  "frame_time": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">錯誤訊息 (Error Message)</div>
+                        <pre>{
+  "type": "error",
+  "message": "影像分析錯誤: 無法檢測到人臉",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">心跳回應 (Pong Response)</div>
+                        <pre>"pong"</pre>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>⚙️ 效能參數</h3>
+                    <table class="table">
+                        <tr><th>參數</th><th>建議值</th><th>說明</th></tr>
+                        <tr><td>幀率</td><td>5-10 FPS</td><td>視網路和處理能力而定</td></tr>
+                        <tr><td>影像解析度</td><td>640x480</td><td>平衡品質和效能</td></tr>
+                        <tr><td>壓縮品質</td><td>0.8 JPEG</td><td>平衡檔案大小和品質</td></tr>
+                        <tr><td>網路延遲</td><td>< 200ms</td><td>建議延遲上限</td></tr>
+                    </table>
+                </div>
+
+                <div class="section">
+                    <h3>💻 使用範例</h3>
+                    <div class="code-block">// JavaScript 發送影像幀範例
+function sendFrame(videoElement) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+
+    ctx.drawImage(videoElement, 0, 0, 640, 480);
+    const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+    const message = {
+        type: 'frame',
+        image: imageData,
+        timestamp: Date.now() / 1000
+    };
+
+    websocket.send(JSON.stringify(message));
+}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 動作檢測 WebSocket -->
+        <div class="endpoint-card">
+            <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                <div>
+                    <span class="endpoint-method">WS</span>
+                    <span class="endpoint-url">/ws/action</span>
+                    <div class="endpoint-description">動作檢測狀態廣播</div>
+                </div>
+                <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="endpoint-content">
+                <div class="section">
+                    <h3>📋 功能說明</h3>
+                    <p>即時廣播動作檢測遊戲的狀態更新和結果。</p>
+                </div>
+
+                <div class="section">
+                    <h3>📥 廣播訊息格式</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">遊戲開始 (Game Start)</div>
+                        <pre>{
+  "channel": "action",
+  "type": "game_start",
+  "difficulty": "medium",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">檢測結果 (Detection Result)</div>
+                        <pre>{
+  "channel": "action",
+  "type": "detection_result",
+  "action": "jump",
+  "confidence": 0.87,
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">狀態更新 (Status Update)</div>
+                        <pre>{
+  "channel": "action",
+  "type": "status_update",
+  "status": "running",
+  "current_action": "raise_hand",
+  "time_remaining": 45.2,
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 手勢識別 WebSocket -->
+        <div class="endpoint-card">
+            <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                <div>
+                    <span class="endpoint-method">WS</span>
+                    <span class="endpoint-url">/ws/gesture</span>
+                    <div class="endpoint-description">手勢識別結果廣播</div>
+                </div>
+                <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="endpoint-content">
+                <div class="section">
+                    <h3>📋 功能說明</h3>
+                    <p>即時廣播手勢識別結果和狀態更新。</p>
+                </div>
+
+                <div class="section">
+                    <h3>📥 廣播訊息格式</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">手勢檢測 (Gesture Detected)</div>
+                        <pre>{
+  "channel": "gesture",
+  "type": "gesture_detected",
+  "gesture": "thumbs_up",
+  "confidence": 0.92,
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">狀態更新 (Status Update)</div>
+                        <pre>{
+  "channel": "gesture",
+  "type": "status_update",
+  "status": "running",
+  "uptime": 30,
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 石頭剪刀布 WebSocket -->
+        <div class="endpoint-card">
+            <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                <div>
+                    <span class="endpoint-method">WS</span>
+                    <span class="endpoint-url">/ws/rps</span>
+                    <div class="endpoint-description">石頭剪刀布遊戲狀態</div>
+                </div>
+                <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="endpoint-content">
+                <div class="section">
+                    <h3>📋 功能說明</h3>
+                    <p>即時廣播石頭剪刀布遊戲的狀態和結果。</p>
+                </div>
+
+                <div class="section">
+                    <h3>📥 廣播訊息格式</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">回合結果 (Round Result)</div>
+                        <pre>{
+  "channel": "rps",
+  "type": "round_result",
+  "player_choice": "rock",
+  "ai_choice": "paper",
+  "result": "ai_win",
+  "scores": {"player": 1, "ai": 2},
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">遊戲結束 (Game End)</div>
+                        <pre>{
+  "channel": "rps",
+  "type": "game_end",
+  "final_scores": {"player": 2, "ai": 3},
+  "winner": "ai",
+  "duration": 120.5,
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI 繪畫 WebSocket -->
+        <div class="endpoint-card">
+            <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                <div>
+                    <span class="endpoint-method">WS</span>
+                    <span class="endpoint-url">/ws/drawing</span>
+                    <div class="endpoint-description">AI 繪畫會話狀態</div>
+                </div>
+                <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="endpoint-content">
+                <div class="section">
+                    <h3>📋 功能說明</h3>
+                    <p>即時廣播AI繪畫會話的狀態和識別結果。</p>
+                </div>
+
+                <div class="section">
+                    <h3>📥 廣播訊息格式</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">繪畫識別 (Drawing Recognition)</div>
+                        <pre>{
+  "channel": "drawing",
+  "type": "recognition_result",
+  "recognized_shape": "circle",
+  "confidence": 0.88,
+  "bounding_box": [100, 150, 300, 250],
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">會話狀態 (Session Status)</div>
+                        <pre>{
+  "channel": "drawing",
+  "type": "session_status",
+  "status": "active",
+  "stroke_count": 45,
+  "canvas_size": [800, 600],
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 關閉代碼參考 -->
+        <div class="endpoint-card">
+            <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                <div>
+                    <span class="endpoint-method">REF</span>
+                    <span class="endpoint-url">WebSocket 關閉代碼</span>
+                    <div class="endpoint-description">標準關閉代碼定義</div>
+                </div>
+                <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="endpoint-content">
+                <table class="table">
+                    <tr>
+                        <th>代碼</th>
+                        <th>名稱</th>
+                        <th>說明</th>
+                        <th>觸發條件</th>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">1000</span></td>
+                        <td>CLOSE_NORMAL</td>
+                        <td>正常關閉</td>
+                        <td>前端呼叫 close() 或正常結束</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">1001</span></td>
+                        <td>CLOSE_GOING_AWAY</td>
+                        <td>端點離開</td>
+                        <td>頁面重新載入、導航離開</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-error">1006</span></td>
+                        <td>CLOSE_ABNORMAL</td>
+                        <td>異常關閉</td>
+                        <td>網路中斷、伺服器崩潰</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-error">1008</span></td>
+                        <td>CLOSE_POLICY_VIOLATION</td>
+                        <td>違反政策</td>
+                        <td>訊息格式錯誤、無效數據</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-error">1011</span></td>
+                        <td>CLOSE_SERVER_ERROR</td>
+                        <td>伺服器錯誤</td>
+                        <td>內部處理錯誤</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let reconnectInterval = null;
+
+        // DOM 元素
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const logArea = document.getElementById('logArea');
+        const wsUrlInput = document.getElementById('wsUrl');
+
+        // 事件監聽器
+        connectBtn.addEventListener('click', connectWebSocket);
+        disconnectBtn.addEventListener('click', disconnectWebSocket);
+        clearLogBtn.addEventListener('click', clearLog);
+
+        // 切換端點內容
+        function toggleEndpoint(header) {
+            const content = header.nextElementSibling;
+            const arrow = header.querySelector('.toggle-arrow');
+
+            content.classList.toggle('active');
+            arrow.classList.toggle('active');
+        }
+
+        // 連接 WebSocket
+        function connectWebSocket() {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                log('已經連接了');
+                return;
+            }
+
+            const url = wsUrlInput.value;
+            log(`嘗試連接: ${url}`);
+
+            updateConnectionStatus('connecting');
+
+            try {
+                websocket = new WebSocket(url);
+
+                websocket.onopen = function(event) {
+                    log('✅ WebSocket 連接成功');
+                    updateConnectionStatus('connected');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                };
+
+                websocket.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`📨 收到訊息: ${JSON.stringify(data, null, 2)}`);
+                    } catch (e) {
+                        log(`📨 收到文字訊息: ${event.data}`);
+                    }
+                };
+
+                websocket.onclose = function(event) {
+                    log(`🔌 連接關閉: 代碼=${event.code}, 原因=${event.reason}`);
+                    updateConnectionStatus('disconnected');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                };
+
+                websocket.onerror = function(error) {
+                    log(`❌ WebSocket 錯誤: ${error}`);
+                    updateConnectionStatus('disconnected');
+                };
+
+            } catch (error) {
+                log(`❌ 連接失敗: ${error.message}`);
+                updateConnectionStatus('disconnected');
+            }
+        }
+
+        // 斷開 WebSocket
+        function disconnectWebSocket() {
+            if (websocket) {
+                log('🔌 正在關閉連接...');
+                websocket.close(1000, '用戶手動關閉');
+                websocket = null;
+            }
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+        }
+
+        // 更新連接狀態
+        function updateConnectionStatus(status) {
+            connectionStatus.className = `status-indicator status-${status}`;
+
+            const statusText = {
+                'connected': '已連接',
+                'disconnected': '未連接',
+                'connecting': '連接中'
+            };
+
+            connectionStatus.title = statusText[status] || status;
+        }
+
+        // 日誌記錄
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logArea.textContent += `[${timestamp}] ${message}\n`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // 清除日誌
+        function clearLog() {
+            logArea.textContent = '';
+        }
+
+        // 頁面載入時初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 自動設定 WebSocket URL
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            wsUrlInput.value = `${protocol}//${host}/ws/emotion/stream`;
+
+            updateConnectionStatus('disconnected');
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+
+            log('WebSocket API 文檔頁面已載入');
+            log('點擊"連接"按鈕來測試 WebSocket 連接');
+        });
+
+        // 頁面離開時清理
+        window.addEventListener('beforeunload', function() {
+            if (websocket) {
+                websocket.close();
+            }
+        });
+    </script>
+</body>
+</html>

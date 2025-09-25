@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/css/emotion_action.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body class="expo-shell">
+    <main class="layout">
+        <section class="console">
+            <div class="console-panel">
+                <div class="console-heading">
+                    <h3>控制台</h3>
+                    <p>選擇展場當前要展示的互動模組。</p>
+                </div>
+                <div class="console-modes">
+                    <button type="button" class="chip mode-btn active" data-mode="emotion">情緒分析</button>
+                    <button type="button" class="chip mode-btn" data-mode="action">動作偵測</button>
+                    <button type="button" class="chip mode-btn" data-mode="rps">石頭剪刀布</button>
+                    <button type="button" class="chip mode-btn" data-mode="drawing">AI 畫布</button>
+                </div>
+            </div>
+            <div class="console-status" aria-live="polite">
+                <h3>系統狀態</h3>
+                <div id="status-container">
+                    <div class="status-message">請選擇分析模式開始...</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="interactive">
+            <article class="panel analysis-panel" id="emotion-panel">
+                <header class="panel-header">
+                    <div>
+                        <span class="panel-tag">Emotion Studio</span>
+                        <h2>情緒分析工作台</h2>
+                        <p>一次支援圖片、影片、即時攝影機的多模態偵測。</p>
+                    </div>
+                    <div class="tabs analysis-tabs">
+                        <button class="tab-btn active" data-tab="upload">📁 上傳分析</button>
+                        <button class="tab-btn" data-tab="webcam">📹 攝影機分析</button>
+                    </div>
+                </header>
+
+                <div class="panel-body">
+                    <div class="tab-content active" id="upload-tab">
+                        <form id="emotion-upload-form" method="post" enctype="multipart/form-data" class="upload-form">
+                            <div class="dropzone" id="emotion-drop-zone">
+                                <div class="dropzone-copy">
+                                    <div class="dropzone-icon">📤</div>
+                                    <h3>拖放素材或點擊上傳</h3>
+                                    <p>支援圖片與影片，單檔上限 {{ max_file_size_mb }} MB。</p>
+                                    <button type="button" class="btn secondary" onclick="document.getElementById('emotion-file-input').click()">挑選檔案</button>
+                                </div>
+                            </div>
+
+                            <div id="emotion-file-preview" class="file-preview hidden">
+                                <div class="file-meta">
+                                    <div class="file-lines">
+                                        <span class="file-name"></span>
+                                        <span class="file-size"></span>
+                                        <span class="file-duration"></span>
+                                    </div>
+                                    <div class="file-progress">
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: 0%"></div>
+                                        </div>
+                                        <span class="progress-text">準備中...</span>
+                                    </div>
+                                </div>
+                                <button type="button" class="remove-file" onclick="clearEmotionFileSelection()" aria-label="移除檔案">✕</button>
+                            </div>
+
+                            <div id="emotion-upload-progress" class="upload-progress" style="display: none;">
+                                <div class="progress-bar">
+                                    <div class="progress-fill"></div>
+                                </div>
+                                <span class="progress-percentage">0%</span>
+                            </div>
+
+                            <input id="emotion-file-input" name="file" type="file" accept="image/*,video/*" hidden>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn primary" disabled id="emotion-analyze-btn">
+                                    <span class="btn-text">開始情緒分析</span>
+                                    <span class="btn-spinner" style="display: none;">⏳ 分析中...</span>
+                                </button>
+                            </div>
+                        </form>
+
+                        <div id="emotion-upload-results" class="results hidden">
+                            <div class="results-header">
+                                <h3>🎭 情緒分析結果</h3>
+                            </div>
+                            <div id="emotion-upload-content" class="results-content"></div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="webcam-tab">
+                        <div class="realtime-controls">
+                            <div class="form-group">
+                                <label for="emotion-duration">檢測時長（秒，留空為無限期）：</label>
+                                <input type="number" id="emotion-duration" name="duration" min="10" max="300" placeholder="無限期">
+                            </div>
+                            <div class="control-buttons">
+                                <button type="button" class="btn primary" id="start-emotion-btn">開始情緒檢測</button>
+                                <button type="button" class="btn secondary" id="stop-emotion-btn" disabled>停止檢測</button>
+                            </div>
+                        </div>
+
+                        <div class="camera-preview hidden" id="emotion-preview">
+                            <div class="preview-header">
+                                <h3>📹 即時檢測</h3>
+                                <div class="preview-stats">
+                                    <span id="detection-duration">00:00</span>
+                                    <span class="divider"></span>
+                                    <span id="detection-count">0</span> 次檢測
+                                </div>
+                            </div>
+                            <div class="emotion-display">
+                                <div class="emotion-icon" id="emotion-icon">😐</div>
+                                <div class="emotion-info">
+                                    <div class="emotion-name" id="emotion-name">中性</div>
+                                    <div class="emotion-confidence">信心度: <span id="emotion-confidence">50%</span></div>
+                                </div>
+                            </div>
+                            <div class="emotion-trend">
+                                <div class="trend-item">
+                                    <span class="trend-label">主導情緒</span>
+                                    <span id="dominant-emotion">中性</span>
+                                </div>
+                                <div class="trend-item">
+                                    <span class="trend-label">穩定性</span>
+                                    <span id="emotion-stability">穩定</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="emotion-results hidden" id="emotion-results">
+                            <h3>📈 檢測統計</h3>
+                            <div id="emotion-summary"></div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="panel analysis-panel hidden" id="action-panel">
+                <header class="panel-header">
+                    <div>
+                        <span class="panel-tag">Action Arena</span>
+                        <h2>動作偵測挑戰</h2>
+                        <p>設定關卡難度，讓觀眾在舞台上完成指定動作。</p>
+                    </div>
+                    <div class="tabs analysis-tabs">
+                        <button class="tab-btn" data-tab="action-upload">📁 影片分析</button>
+                        <button class="tab-btn active" data-tab="action-game">🎮 即時遊戲</button>
+                    </div>
+                </header>
+
+                <div class="panel-body">
+                    <div class="tab-content" id="action-upload-tab">
+                        <form id="action-upload-form" method="post" enctype="multipart/form-data" class="upload-form">
+                            <div class="dropzone" id="action-drop-zone">
+                                <div class="dropzone-copy">
+                                    <div class="dropzone-icon">📤</div>
+                                    <h3>拖放影片或點擊上傳</h3>
+                                    <p>支援 MP4, AVI, MOV 等格式，單檔上限 {{ max_file_size_mb }} MB。</p>
+                                    <button type="button" class="btn secondary" onclick="document.getElementById('action-file-input').click()">挑選影片</button>
+                                </div>
+                            </div>
+
+                            <div id="action-file-preview" class="file-preview hidden">
+                                <div class="file-meta">
+                                    <div class="file-lines">
+                                        <span class="file-name"></span>
+                                        <span class="file-size"></span>
+                                        <span class="file-duration"></span>
+                                    </div>
+                                    <div class="file-progress">
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: 0%"></div>
+                                        </div>
+                                        <span class="progress-text">準備中...</span>
+                                    </div>
+                                </div>
+                                <button type="button" class="remove-file" onclick="clearActionFileSelection()" aria-label="移除檔案">✕</button>
+                            </div>
+
+                            <input id="action-file-input" name="file" type="file" accept="video/*" hidden>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn primary" disabled id="action-analyze-btn">
+                                    <span class="btn-text">開始動作分析</span>
+                                    <span class="btn-spinner" style="display: none;">⏳ 分析中...</span>
+                                </button>
+                            </div>
+                        </form>
+
+                        <div id="action-upload-results" class="results hidden">
+                            <div class="results-header">
+                                <h3>🤸 動作分析結果</h3>
+                                <p>檢測影片中的各種動作表現。</p>
+                            </div>
+                            <div id="action-upload-content" class="results-content"></div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content active" id="action-game-tab">
+                        <div class="action-controls">
+                        <div class="form-group">
+                            <label for="difficulty-select">遊戲難度：</label>
+                            <select id="difficulty-select" name="difficulty">
+                                <option value="easy">🟢 簡單 (3個動作)</option>
+                                <option value="medium">🟡 中等 (5個動作)</option>
+                                <option value="hard">🔴 困難 (7個動作)</option>
+                            </select>
+                        </div>
+                        <div class="control-buttons">
+                            <button type="button" class="btn primary" id="start-action-btn">開始遊戲</button>
+                            <button type="button" class="btn secondary" id="stop-action-btn" disabled>停止遊戲</button>
+                        </div>
+                    </div>
+
+                    <div class="game-status hidden" id="game-status">
+                        <div class="game-header">
+                            <h3>🎮 遊戲進行中</h3>
+                            <div class="game-stats">
+                                <span>難度: <span id="game-difficulty">簡單</span></span>
+                                <span class="divider"></span>
+                                <span>進度: <span id="game-progress">0/3</span></span>
+                                <span class="divider"></span>
+                                <span>分數: <span id="game-score">0</span></span>
+                            </div>
+                        </div>
+                        <div class="current-action">
+                            <div class="action-prompt">
+                                <div class="action-emoji" id="action-emoji">🎯</div>
+                                <div class="action-info">
+                                    <div class="action-name" id="action-name">準備開始...</div>
+                                    <div class="action-description" id="action-description">遊戲即將開始</div>
+                                </div>
+                            </div>
+                            <div class="action-progress">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="action-progress-fill"></div>
+                                </div>
+                                <div class="progress-text" id="action-progress-text">0%</div>
+                            </div>
+                        </div>
+                        <div class="action-checklist">
+                            <h4>✅ 動作清單</h4>
+                            <div id="action-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="game-results hidden" id="game-results">
+                            <h3>🏆 遊戲結果</h3>
+                            <div id="final-score-display"></div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="panel analysis-panel hidden" id="rps-panel">
+                <header class="panel-header">
+                    <div>
+                        <span class="panel-tag">RPS Duel Stage</span>
+                        <h2>石頭剪刀布對戰</h2>
+                        <p>用手勢進行剪刀石頭布遊戲，挑戰不同難度的 AI 對手。</p>
+                    </div>
+                </header>
+
+                <div class="panel-body">
+                    <div class="rps-controls">
+                        <div class="form-group">
+                            <label for="rps-mode-select">遊戲模式：</label>
+                            <select id="rps-mode-select" name="mode">
+                                <option value="vs_ai">🤖 對戰 AI</option>
+                                <option value="vs_player" disabled>👥 雙人對戰 (即將推出)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="rps-difficulty-select">AI 難度：</label>
+                            <select id="rps-difficulty-select" name="difficulty">
+                                <option value="easy">🟢 簡單 - 隨機出招</option>
+                                <option value="medium" selected>🟡 中等 - 有記憶力</option>
+                                <option value="hard">🔴 困難 - 高級策略</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="rps-target-score">目標分數：</label>
+                            <input type="number" id="rps-target-score" name="target_score" value="3" min="1" max="10">
+                        </div>
+                        <div class="control-buttons">
+                            <button type="button" class="btn primary" id="start-rps-btn">開始遊戲</button>
+                            <button type="button" class="btn secondary" id="stop-rps-btn" disabled>停止遊戲</button>
+                        </div>
+                    </div>
+
+                    <div class="rps-game-display hidden" id="rps-game-display">
+                        <div class="rps-game-header">
+                            <h3>🎮 遊戲進行中</h3>
+                            <div class="rps-game-stats">
+                                <span>模式: <span id="rps-current-mode">vs_ai</span></span>
+                                <span class="divider"></span>
+                                <span>難度: <span id="rps-current-difficulty">medium</span></span>
+                                <span class="divider"></span>
+                                <span>分數: 你 <span id="rps-player-score">0</span> - <span id="rps-opponent-score">0</span> AI</span>
+                            </div>
+                        </div>
+
+                        <div class="rps-battle-area">
+                            <div class="rps-players">
+                                <div class="rps-player">
+                                    <div class="player-name">你</div>
+                                    <div class="gesture-display" id="rps-player-gesture">❓</div>
+                                    <div class="gesture-status" id="rps-player-status">準備中...</div>
+                                </div>
+                                <div class="rps-vs">VS</div>
+                                <div class="rps-player">
+                                    <div class="player-name">AI</div>
+                                    <div class="gesture-display" id="rps-ai-gesture">❓</div>
+                                    <div class="gesture-status" id="rps-ai-status">準備中...</div>
+                                </div>
+                            </div>
+                            <div class="rps-round-info">
+                                <div class="round-message" id="rps-round-message">準備開始...</div>
+                                <div class="countdown-display" id="rps-countdown" style="display: none;">3</div>
+                                <div class="rps-countdown-overlay" id="rps-countdown-overlay" style="display: none;">
+                                    <div class="countdown-image-container">
+                                        <img class="countdown-image" id="countdown-image" src="/static/assets/rps/rock.jpg" alt="倒數圖片">
+                                        <div class="countdown-number" id="countdown-number">3</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="rps-game-history">
+                            <h4>📊 對戰記錄</h4>
+                            <div id="rps-history-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="rps-results hidden" id="rps-results">
+                        <h3>🏆 遊戲結果</h3>
+                        <div id="rps-final-result"></div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="panel analysis-panel hidden" id="drawing-panel">
+                <header class="panel-header">
+                    <div>
+                        <span class="panel-tag">Sketch Lab</span>
+                        <h2>AI 繪畫識別</h2>
+                        <p>用手指在空中繪畫，讓 AI 猜猜你畫的是什麼。</p>
+                    </div>
+                </header>
+
+                <div class="panel-body">
+                    <div class="drawing-controls">
+                        <div class="form-group">
+                            <label for="drawing-mode-select">繪畫模式：</label>
+                            <select id="drawing-mode-select" name="mode">
+                                <option value="index_finger" selected>👆 食指繪畫</option>
+                                <option value="gesture_control">✋ 手勢控制 (食指畫/雙指擦/五指清空)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="drawing-color-select">繪畫顏色：</label>
+                            <select id="drawing-color-select" name="color">
+                                <option value="black" selected>⚫ 黑色</option>
+                                <option value="red">🔴 紅色</option>
+                                <option value="blue">🔵 藍色</option>
+                                <option value="green">🟢 綠色</option>
+                                <option value="yellow">🟡 黃色</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="drawing-auto-recognize" checked>
+                                <span class="checkmark"></span>
+                                自動識別 (每3秒)
+                            </label>
+                        </div>
+                        <div class="control-buttons">
+                            <button type="button" class="btn primary" id="start-drawing-btn">開始繪畫</button>
+                            <button type="button" class="btn secondary" id="stop-drawing-btn" disabled>停止會話</button>
+                            <button type="button" class="btn ghost" id="clear-canvas-btn" disabled>清空畫布</button>
+                            <button type="button" class="btn ghost" id="recognize-drawing-btn" disabled>立即識別</button>
+                        </div>
+                    </div>
+
+                    <div class="drawing-display hidden" id="drawing-display">
+                        <div class="drawing-header">
+                            <h3>🎨 繪畫中</h3>
+                            <div class="drawing-stats">
+                                <span>模式: <span id="drawing-current-mode">食指繪畫</span></span>
+                                <span class="divider"></span>
+                                <span>顏色: <span id="drawing-current-color">黑色</span></span>
+                                <span class="divider"></span>
+                                <span>筆劃: <span id="drawing-stroke-count">0</span></span>
+                            </div>
+                        </div>
+
+                        <div class="drawing-canvas-container">
+                            <div class="canvas-placeholder" id="drawing-canvas-display">
+                                <div class="canvas-message">畫布預覽區域<br><small>攝影機檢測到手指動作時會顯示繪畫內容</small></div>
+                            </div>
+                        </div>
+
+                        <div class="drawing-recognition">
+                            <h4>🤖 AI 識別結果</h4>
+                            <div class="recognition-display" id="drawing-recognition-result">
+                                <div class="recognition-message" id="recognition-message">開始繪畫讓 AI 來猜猜看！</div>
+                                <div class="recognition-confidence" id="recognition-confidence"></div>
+                                <div class="recognition-suggestions" id="recognition-suggestions"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="drawing-results hidden" id="drawing-results">
+                        <h3>🎨 繪畫會話結果</h3>
+                        <div id="drawing-final-result"></div>
+                    </div>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <small>© {{ title }} · Expo Games Interactive Hub</small>
+    </footer>
+
+    <script>
+        window.appConfig = { pageType: 'emotion_action' };
+    </script>
+    <!-- 使用模組化 JavaScript -->
+    <script type="module" src="/static/js/emotion_action.js"></script>
+</body>
+</html>

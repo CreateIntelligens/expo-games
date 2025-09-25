@@ -1,0 +1,48 @@
+services:
+  expo-games-app:
+    build: .
+    image: expo-games-service:latest
+    container_name: expo-games-app
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    devices:
+      - /dev/video0:/dev/video0  # 攝影機設備映射
+    expose:
+      - "${APP_PORT:-8896}"
+    environment:
+      - APP_PORT=${APP_PORT:-8896}
+      - CUDA_VISIBLE_DEVICES=0
+      - TF_FORCE_GPU_ALLOW_GROWTH=true
+    restart: unless-stopped
+    privileged: true  # 給予特權模式以訪問硬件設備
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  expo-games-proxy:
+    image: nginx:1.27-alpine
+    container_name: expo-games-proxy
+    depends_on:
+      - expo-games-app
+    env_file:
+      - .env
+    ports:
+      - "${EXTERNAL_PORT:-8896}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/default.conf.template:/etc/nginx/conf.d/default.conf.template:ro
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/generate-ssl.sh:/docker-entrypoint.d/01-generate-ssl.sh:ro
+      - ./nginx/substitute-env.sh:/docker-entrypoint.d/02-substitute-env.sh:ro
+    command: ["/docker-entrypoint.d/02-substitute-env.sh"]
+    restart: unless-stopped
+
+networks:
+  default:
+    name: expo-games_default
