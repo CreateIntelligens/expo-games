@@ -4,7 +4,6 @@
 # =============================================================================
 
 import logging
-import os
 import threading
 import time
 from collections import deque
@@ -12,27 +11,48 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 import base64
 import io
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw
 
-# MediaPipe 依賴初始化
-os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
+from ..utils.gpu_runtime import configure_gpu_runtime
+
+_GPU_STATUS = configure_gpu_runtime()
+
 try:
     import mediapipe as mp
     _MEDIAPIPE_AVAILABLE = True
     _MEDIAPIPE_ERROR: Optional[str] = None
 except Exception as exc:
-    mp = None
+    mp = SimpleNamespace(solutions=SimpleNamespace(hands=None))
     _MEDIAPIPE_AVAILABLE = False
     _MEDIAPIPE_ERROR = str(exc)
 
 from .status_broadcaster import StatusBroadcaster
 from ..utils.datetime_utils import _now_ts
+from ..utils.hand_tracking_module import HandTrackingModule, GestureResult, GestureType
+from ..utils.drawing_engine import DrawingEngine, BrushType
+
+# WebSocket 支援
+import asyncio
+import json
+from typing import Set
+from fastapi import WebSocket, WebSocketDisconnect
 
 
 logger = logging.getLogger(__name__)
+
+if _GPU_STATUS.warnings:
+    for warning in _GPU_STATUS.warnings:
+        logger.warning("GPU setup warning: %s", warning)
+else:
+    logger.info(
+        "DrawingService GPU ready | TensorFlow devices: %s | MediaPipe GPU enabled: %s",
+        _GPU_STATUS.tensorflow_devices,
+        _GPU_STATUS.mediapipe_gpu_enabled,
+    )
 
 
 class DrawingMode(Enum):
@@ -77,8 +97,9 @@ class FingerTracker:
                 self.hands = self.mp_hands.Hands(
                     static_image_mode=False,
                     max_num_hands=1,
-                    min_detection_confidence=0.7,
-                    min_tracking_confidence=0.5
+                    min_detection_confidence=0.6,  # 平衡準確度和敏感度
+                    min_tracking_confidence=0.5,   # 穩定的追蹤
+                    model_complexity=1             # 使用中等模型，平衡速度和準確度
                 )
                 logger.info("MediaPipe Hands 初始化完成，啟用手指追蹤")
             except Exception as exc:
@@ -130,21 +151,43 @@ class FingerTracker:
         return finger_positions
 
     def _get_fingers_up(self, hand_landmarks) -> List[bool]:
-        """檢測哪些手指是伸直的"""
+        """檢測哪些手指是伸直的
+
+        策略：
+        - 拇指永遠回傳 False（忽略拇指判定，避免誤判）
+        - 食指判定適中（方便繪畫）
+        - 其他手指判定嚴格（確保只有食指伸直時才繪畫）
+        - 使用三點判斷避免背景干擾
+        """
         fingers = []
 
-        # 拇指 (特殊處理)
-        if hand_landmarks.landmark[4].x > hand_landmarks.landmark[3].x:
-            fingers.append(True)
-        else:
-            fingers.append(False)
+        # 拇指 - 直接忽略，永遠回傳 False
+        fingers.append(False)
 
-        # 其他四指
-        for finger_tip, finger_pip in [(8, 6), (12, 10), (16, 14), (20, 18)]:
-            if hand_landmarks.landmark[finger_tip].y < hand_landmarks.landmark[finger_pip].y:
-                fingers.append(True)
-            else:
-                fingers.append(False)
+        # 食指 (使用三點判斷)
+        index_tip = hand_landmarks.landmark[8]
+        index_pip = hand_landmarks.landmark[6]
+        index_mcp = hand_landmarks.landmark[5]
+
+        # 食指判定：tip 高於 PIP，且 PIP 高於或接近 MCP
+        index_extended = (index_tip.y < index_pip.y - 0.01) and (index_pip.y < index_mcp.y + 0.02)
+        fingers.append(index_extended)
+
+        # 中指、無名指、小指 (使用適中的三點判斷)
+        other_fingers = [
+            (12, 10, 9),   # 中指: tip, pip, mcp
+            (16, 14, 13),  # 無名指
+            (20, 18, 17)   # 小指
+        ]
+
+        for tip_idx, pip_idx, mcp_idx in other_fingers:
+            tip = hand_landmarks.landmark[tip_idx]
+            pip = hand_landmarks.landmark[pip_idx]
+            mcp = hand_landmarks.landmark[mcp_idx]
+
+            # 適中判定：比食指嚴格一點，但不要太嚴格
+            is_extended = (tip.y < pip.y - 0.02) and (pip.y < mcp.y + 0.01)
+            fingers.append(is_extended)
 
         return fingers
 
@@ -155,16 +198,26 @@ class VirtualCanvas:
     def __init__(self, width: int = 640, height: int = 480):
         self.width = width
         self.height = height
-        self.canvas = np.zeros((height, width, 3), dtype=np.uint8)
+        # 初始化為透明背景的RGBA畫布
+        self.canvas = np.zeros((height, width, 4), dtype=np.uint8)
         self.drawing_points = deque(maxlen=1000)  # 最近1000個繪畫點
         self.current_color = DrawingColor.BLACK.value
         self.brush_size = 5
         self.is_drawing = False
         self.last_position = None
 
+    @property
+    def _color_with_alpha(self) -> Tuple[int, int, int, int]:
+        """將當前顏色轉換為含 alpha 的 BGRA 顏色。"""
+
+        if len(self.current_color) == 4:
+            return self.current_color
+        return (*self.current_color, 255)
+
     def clear_canvas(self):
         """清空畫布"""
-        self.canvas = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+        # 清空為透明背景（RGBA）
+        self.canvas = np.zeros((self.height, self.width, 4), dtype=np.uint8)
         self.drawing_points.clear()
         self.last_position = None
 
@@ -187,10 +240,10 @@ class VirtualCanvas:
         if action == DrawingAction.DRAW:
             if self.last_position is not None:
                 # 畫線連接兩點
-                cv2.line(self.canvas, self.last_position, (x, y), self.current_color, self.brush_size)
+                cv2.line(self.canvas, self.last_position, (x, y), self._color_with_alpha, self.brush_size)
             else:
                 # 畫點
-                cv2.circle(self.canvas, (x, y), self.brush_size // 2, self.current_color, -1)
+                cv2.circle(self.canvas, (x, y), self.brush_size // 2, self._color_with_alpha, -1)
 
             self.drawing_points.append({
                 'position': (x, y),
@@ -201,7 +254,7 @@ class VirtualCanvas:
 
         elif action == DrawingAction.ERASE:
             # 橡皮擦效果
-            cv2.circle(self.canvas, (x, y), self.brush_size * 2, (0, 0, 0), -1)
+            cv2.circle(self.canvas, (x, y), self.brush_size * 2, (0, 0, 0, 0), -1)
 
         self.last_position = (x, y)
 
@@ -214,9 +267,17 @@ class VirtualCanvas:
         return self.canvas.copy()
 
     def get_canvas_base64(self) -> str:
-        """獲取畫布的 base64 編碼"""
-        # 轉換為 PIL Image
-        pil_image = Image.fromarray(cv2.cvtColor(self.canvas, cv2.COLOR_BGR2RGB))
+        """獲取畫布的 base64 編碼（左右反轉以符合使用者視角）"""
+        # 對於RGBA canvas，直接創建PIL Image
+        if self.canvas.shape[2] == 4:  # RGBA
+            # 將BGRA轉換為RGBA（OpenCV使用BGRA，PIL使用RGBA）
+            rgba_canvas = cv2.cvtColor(self.canvas, cv2.COLOR_BGRA2RGBA)
+            pil_image = Image.fromarray(rgba_canvas, mode='RGBA')
+        else:  # RGB
+            pil_image = Image.fromarray(cv2.cvtColor(self.canvas, cv2.COLOR_BGR2RGB), mode='RGB')
+
+        # 左右反轉畫布，使其符合鏡像攝影機的視角
+        pil_image = pil_image.transpose(Image.FLIP_LEFT_RIGHT)
 
         # 轉換為 base64
         buffered = io.BytesIO()
@@ -226,8 +287,8 @@ class VirtualCanvas:
         return f"data:image/png;base64,{img_base64}"
 
 
-class SimpleAIRecognizer:
-    """簡單的 AI 識別器（基於形狀分析）"""
+class ShapeRecognizer:
+    """形狀識別器（基於輪廓分析）"""
 
     def __init__(self):
         self.shape_templates = {
@@ -240,8 +301,11 @@ class SimpleAIRecognizer:
 
     def recognize_drawing(self, canvas: np.ndarray) -> Dict:
         """識別畫布上的圖形"""
-        # 轉為灰度圖
-        gray = cv2.cvtColor(canvas, cv2.COLOR_BGR2GRAY)
+        # 轉為灰度圖，支援 BGRA/BGR
+        if canvas.ndim == 3 and canvas.shape[2] == 4:
+            gray = cv2.cvtColor(canvas, cv2.COLOR_BGRA2GRAY)
+        else:
+            gray = cv2.cvtColor(canvas, cv2.COLOR_BGR2GRAY)
 
         # 二值化
         _, binary = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
@@ -420,7 +484,7 @@ class DrawingService:
         self.status_broadcaster = status_broadcaster
         self.finger_tracker = FingerTracker()
         self.virtual_canvas = VirtualCanvas()
-        self.ai_recognizer = SimpleAIRecognizer()
+        self.ai_recognizer = ShapeRecognizer()
 
         if not self.finger_tracker.is_available():
             logger.error(
@@ -444,10 +508,23 @@ class DrawingService:
         self.total_strokes = 0
         self.recognition_history = []
 
+        # 視覺穩定性控制
+        self.last_canvas_update_time = 0
+        self.canvas_update_interval = 0.1  # 最少間隔100ms更新一次畫布
+        self.last_stable_gesture = "none"
+
+        # 畫布尺寸（預設值，會在開始會話時更新）
+        self.canvas_width = 640
+        self.canvas_height = 480
+
+        # 顏色選擇區域配置（4種顏色均分畫面寬度）
+        self.color_zones = ['black', 'red', 'blue', 'green']
+
     def start_drawing_session(self,
                             mode: str = "index_finger",
                             color: str = "black",
-                            auto_recognize: bool = True) -> Dict:
+                            auto_recognize: bool = True,
+                            websocket_mode: bool = False) -> Dict:
         """開始繪畫會話"""
         if not self.finger_tracker.is_available():
             error_msg = self.finger_tracker.init_error or "MediaPipe Hands 初始化失敗"
@@ -465,14 +542,23 @@ class DrawingService:
             self.current_color = DrawingColor[color.upper()]
             self.auto_recognize = auto_recognize
 
-            # 開啟攝影機
-            self.camera = cv2.VideoCapture(0)
-            if not self.camera.isOpened():
-                return {"status": "error", "message": "無法開啟攝影機"}
+            # WebSocket 模式不需要開啟攝影機
+            if not websocket_mode:
+                # 開啟攝影機
+                self.camera = cv2.VideoCapture(0)
+                if not self.camera.isOpened():
+                    return {"status": "error", "message": "無法開啟攝影機"}
 
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            self.camera.set(cv2.CAP_PROP_FPS, 30)
+                self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                self.camera.set(cv2.CAP_PROP_FPS, 30)
+
+                # 開始繪畫線程
+                self.drawing_thread = threading.Thread(
+                    target=self._drawing_loop,
+                    daemon=True
+                )
+                self.drawing_thread.start()
 
             # 重置狀態
             self.virtual_canvas.clear_canvas()
@@ -481,13 +567,8 @@ class DrawingService:
             self.total_strokes = 0
             self.recognition_history = []
 
-            # 開始繪畫線程
+            # 設置繪畫狀態
             self.is_drawing = True
-            self.drawing_thread = threading.Thread(
-                target=self._drawing_loop,
-                daemon=True
-            )
-            self.drawing_thread.start()
 
             # 廣播開始狀態
             self.status_broadcaster.broadcast_threadsafe({
@@ -498,6 +579,7 @@ class DrawingService:
                     "mode": mode,
                     "color": color,
                     "auto_recognize": auto_recognize,
+                    "websocket_mode": websocket_mode,
                     "start_time": self.drawing_start_time
                 }
             })
@@ -506,7 +588,8 @@ class DrawingService:
                 "status": "started",
                 "message": "繪畫會話已開始",
                 "mode": mode,
-                "color": color
+                "color": color,
+                "websocket_mode": websocket_mode
             }
 
         except Exception as exc:
@@ -599,6 +682,316 @@ class DrawingService:
         })
 
         return {"status": "success", "message": "畫布已清空"}
+
+    def change_drawing_color(self, color: str) -> Dict:
+        """變更繪畫顏色"""
+        try:
+            # 驗證顏色
+            valid_colors = ["black", "red", "green", "blue", "yellow", "purple", "cyan", "white"]
+            if color not in valid_colors:
+                return {
+                    "status": "error",
+                    "message": f"無效的顏色: {color}，支援的顏色: {', '.join(valid_colors)}"
+                }
+
+            # 設置新顏色
+            self.current_color = DrawingColor[color.upper()]
+            self.virtual_canvas.set_color(self.current_color)
+
+            self.status_broadcaster.broadcast_threadsafe({
+                "channel": "drawing",
+                "stage": "color_changed",
+                "message": f"繪畫顏色已更改為 {color}",
+                "data": {"new_color": color}
+            })
+
+            return {
+                "status": "success",
+                "message": f"繪畫顏色已更改為 {color}",
+                "color": color
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"顏色變更失敗: {str(e)}"
+            }
+
+    def process_frame_for_gesture_drawing(self, frame_data: bytes, mode: str = "gesture_control") -> Dict:
+        """處理單一幀用於手勢繪畫（WebSocket模式）
+
+        接收前端發送的影像幀，進行手勢識別和繪畫處理，返回處理結果。
+
+        Args:
+            frame_data (bytes): JPEG 編碼的影像幀數據
+            mode (str): 繪畫模式 ("gesture_control", "index_finger")
+
+        Returns:
+            Dict: 處理結果，包含手勢狀態、畫布更新和識別結果
+        """
+        try:
+            # 將 bytes 轉換為 numpy array
+            nparr = np.frombuffer(frame_data, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if frame is None:
+                return {
+                    "type": "error",
+                    "message": "無法解碼影像幀",
+                    "timestamp": time.time()
+                }
+
+            # 翻轉鏡像效果（與攝影機預覽一致）
+            frame = cv2.flip(frame, 1)
+
+            # 更新畫布尺寸
+            self.canvas_height, self.canvas_width = frame.shape[:2]
+
+            # 獲取手指位置
+            finger_positions = self.finger_tracker.get_finger_positions(frame)
+
+            # 處理繪畫輸入
+            gesture_info = self._process_gesture_drawing_frame(finger_positions, mode)
+
+            # 檢查是否需要進行 AI 識別
+            recognition_result = None
+            if self.auto_recognize and self.total_strokes > 0 and self.total_strokes % 50 == 0:  # 每50筆劃檢查一次
+                recognition_result = self.recognize_current_drawing()
+
+            # 準備回應數據
+            current_time = time.time()
+            gesture_name = gesture_info["gesture"]
+
+            response = {
+                "type": "gesture_status",
+                "current_gesture": gesture_name,
+                "fingers_up": finger_positions.get('fingers_up', [False] * 5) if finger_positions else [False] * 5,
+                "drawing_position": gesture_info.get("position"),
+                "timestamp": current_time
+            }
+
+            # 如果有繪畫發生，立即更新畫布（移除節流以確保即時性）
+            if gesture_info["drawing_occurred"]:
+                response.update({
+                    "canvas_base64": self.virtual_canvas.get_canvas_base64(),
+                    "stroke_count": self.total_strokes,
+                    "current_color": self.current_color.name.lower()
+                })
+
+            # 如果是顏色選擇手勢，額外發送顏色變更通知
+            if gesture_name == "color_selecting" and "selected_color" in gesture_info:
+                response.update({
+                    "color_changed": True,
+                    "new_color": gesture_info["selected_color"],
+                    "current_color": self.current_color.name.lower()
+                })
+                logger.info(f"✅ 發送顏色變更通知: {gesture_info['selected_color']}")
+
+            # 如果是清空手勢，額外發送清空通知
+            if gesture_name == "clearing":
+                response.update({
+                    "canvas_cleared": True,
+                    "canvas_base64": self.virtual_canvas.get_canvas_base64()
+                })
+                logger.info("✅ 發送畫布清空通知")
+
+            # 如果有識別結果，包含識別信息
+            if recognition_result:
+                response.update({
+                    "type": "recognition_result",
+                    "recognized_shape": recognition_result["recognized"],
+                    "confidence": recognition_result["confidence"],
+                    "message": recognition_result["message"]
+                })
+
+            return response
+
+        except Exception as exc:
+            logger.exception("處理手勢繪畫幀時發生錯誤: %s", exc)
+            return {
+                "type": "error",
+                "message": f"幀處理錯誤: {str(exc)}",
+                "timestamp": time.time()
+            }
+
+    def change_drawing_color(self, color_name: str) -> Dict:
+        """變更繪畫顏色"""
+        try:
+            # 驗證顏色名稱
+            color_name = color_name.upper()
+            if not hasattr(DrawingColor, color_name):
+                return {
+                    "type": "error",
+                    "message": f"不支持的顏色: {color_name}",
+                    "timestamp": time.time()
+                }
+
+            # 設置新顏色
+            self.current_color = DrawingColor[color_name]
+            self.virtual_canvas.set_color(self.current_color)
+
+            logger.info("繪畫顏色已變更為: %s", color_name)
+
+            return {
+                "type": "color_changed",
+                "color": color_name.lower(),
+                "message": f"顏色已變更為 {color_name.lower()}",
+                "timestamp": time.time()
+            }
+
+        except Exception as exc:
+            logger.exception("變更顏色時發生錯誤: %s", exc)
+            return {
+                "type": "error",
+                "message": f"顏色變更失敗: {str(exc)}",
+                "timestamp": time.time()
+            }
+
+    def change_brush_size(self, size: int) -> Dict:
+        """變更筆刷大小"""
+        try:
+            # 驗證筆刷大小
+            size = max(1, min(50, size))  # 限制在1-50之間
+
+            # 設置新筆刷大小
+            self.virtual_canvas.set_brush_size(size)
+
+            logger.info("筆刷大小已變更為: %d", size)
+
+            return {
+                "type": "brush_size_changed",
+                "size": size,
+                "message": f"筆刷大小已變更為 {size}",
+                "timestamp": time.time()
+            }
+
+        except Exception as exc:
+            logger.exception("變更筆刷大小時發生錯誤: %s", exc)
+            return {
+                "type": "error",
+                "message": f"筆刷大小變更失敗: {str(exc)}",
+                "timestamp": time.time()
+            }
+
+    def _detect_color_from_position(self, x_pos: int) -> str:
+        """根據 x 座標判斷選擇的顏色
+
+        Args:
+            x_pos: 手指的 x 座標
+
+        Returns:
+            str: 顏色名稱
+        """
+        zone_width = self.canvas_width / len(self.color_zones)
+        color_index = int(x_pos / zone_width)
+        color_index = max(0, min(color_index, len(self.color_zones) - 1))
+        return self.color_zones[color_index]
+
+    def _process_gesture_drawing_frame(self, finger_positions: Dict, mode: str) -> Dict:
+        """處理單一幀的手勢繪畫邏輯"""
+        gesture_info = {
+            "gesture": "no_hand",
+            "drawing_occurred": False,
+            "position": None
+        }
+
+        if not finger_positions:
+            # 沒有檢測到手，停止繪畫
+            self.virtual_canvas.stop_drawing()
+            return gesture_info
+
+        fingers_up = finger_positions.get('fingers_up', [False] * 5)
+        fingers_count = sum(fingers_up)
+        index_pos = finger_positions.get('index')
+
+        if mode == "gesture_control":
+            # Debug: 印出手勢判定資訊
+            logger.info(f"👆 手勢判定 - fingers_up: {fingers_up}, count: {fingers_count}, index_pos: {index_pos}")
+
+            if fingers_count == 1 and fingers_up[1] and index_pos:  # 只有食指 - 繪畫
+                self.virtual_canvas.draw_point(index_pos, DrawingAction.DRAW)
+                self.total_strokes += 1
+                gesture_info.update({
+                    "gesture": "drawing",
+                    "drawing_occurred": True,
+                    "position": index_pos
+                })
+                logger.info(f"✏️ 繪畫動作確認 - 位置: {index_pos}")
+
+            elif fingers_count == 2 and fingers_up[1] and fingers_up[2] and index_pos:  # 食指+中指 - 選擇模式
+                middle_pos = finger_positions.get('middle')
+                logger.info(f"🖐️ 雙指偵測 - index_pos: {index_pos}, middle_pos: {middle_pos}")
+
+                if middle_pos:
+                    # 計算食指和中指的中點位置
+                    selection_pos = ((index_pos[0] + middle_pos[0]) // 2,
+                                    (index_pos[1] + middle_pos[1]) // 2)
+
+                    # 檢查是否在顏色選擇區域（畫面頂部 15%）
+                    color_zone_height = int(self.canvas_height * 0.15)
+                    logger.info(f"🎨 選擇位置: {selection_pos}, 顏色區高度: {color_zone_height}, canvas高度: {self.canvas_height}")
+
+                    if selection_pos[1] < color_zone_height:
+                        # 在顏色選擇區域 - 根據 x 座標判斷選擇哪個顏色
+                        selected_color = self._detect_color_from_position(selection_pos[0])
+                        if selected_color != self.current_color.name.lower():
+                            self.current_color = DrawingColor[selected_color.upper()]
+                            self.virtual_canvas.set_color(self.current_color)
+                            gesture_info.update({
+                                "gesture": "color_selecting",
+                                "selected_color": selected_color,
+                                "position": selection_pos
+                            })
+                            logger.info(f"🎨 顏色已切換: {selected_color}")
+                        else:
+                            gesture_info.update({
+                                "gesture": "selecting",
+                                "position": selection_pos
+                            })
+                    else:
+                        # 在畫布區域 - 橡皮擦功能
+                        self.virtual_canvas.draw_point(index_pos, DrawingAction.ERASE)
+                        gesture_info.update({
+                            "gesture": "erasing",
+                            "drawing_occurred": True,
+                            "position": index_pos
+                        })
+                else:
+                    # 沒有中指位置，預設為橡皮擦
+                    self.virtual_canvas.draw_point(index_pos, DrawingAction.ERASE)
+                    gesture_info.update({
+                        "gesture": "erasing",
+                        "drawing_occurred": True,
+                        "position": index_pos
+                    })
+
+            elif fingers_count == 4:  # 四指全開（忽略拇指）- 清空
+                self.virtual_canvas.clear_canvas()
+                self.total_strokes = 0
+                gesture_info.update({
+                    "gesture": "clearing",
+                    "drawing_occurred": True
+                })
+
+            else:
+                # 其他手勢或無效手勢，停止繪畫
+                self.virtual_canvas.stop_drawing()
+                gesture_info["gesture"] = "idle"
+
+        elif mode == "index_finger":
+            if fingers_up[1] and not fingers_up[2] and index_pos:  # 食指繪畫，中指不伸直
+                self.virtual_canvas.draw_point(index_pos, DrawingAction.DRAW)
+                self.total_strokes += 1
+                gesture_info.update({
+                    "gesture": "drawing",
+                    "drawing_occurred": True,
+                    "position": index_pos
+                })
+            else:
+                self.virtual_canvas.stop_drawing()
+                gesture_info["gesture"] = "idle"
+
+        return gesture_info
 
     def _drawing_loop(self):
         """繪畫主循環"""

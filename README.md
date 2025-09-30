@@ -24,9 +24,16 @@
 
 ### AI 繪畫識別 (Sketch Lab)
 - **虛擬繪畫**：用手指在空中繪畫，生成虛擬畫布
+- **手勢控制**：
+  - 食指單獨伸出 = 繪畫
+  - 雙指（食指+中指）在頂部 15% 區域 = 選擇顏色
+  - 雙指在畫布區域 = 橡皮擦
+  - 四指伸出 = 清空畫布
+- **顏色選擇**：4 種基礎顏色（黑、紅、藍、綠），通過手勢在畫面頂部選擇
 - **AI 識別**：智慧識別繪畫內容（圓形、方形、三角形、心形等）
-- **多種模式**：食指繪畫、手勢控制（雙指擦除、五指清空）
+- **透明輸出**：結束繪畫後輸出透明背景的 PNG 圖片，方便後續使用
 - **即時反饋**：自動識別、建議提示、信心度評估
+- **WebSocket 即時**：20 FPS 即時手勢追蹤和畫布更新
 
 ### 系統架構特色
 - **容器化部署**：Docker + docker-compose 一鍵啟動
@@ -68,18 +75,34 @@ expo-games/
 │   ├── services/
 │   │   ├── emotion_service.py         # 情緒分析服務
 │   │   ├── action_detection_service.py # 動作檢測遊戲服務
+│   │   ├── drawing_service.py         # AI 繪畫服務 (WebSocket)
+│   │   ├── hand_gesture_service.py    # 手勢識別服務
+│   │   ├── rps_game_service.py        # 石頭剪刀布遊戲服務
 │   │   └── status_broadcaster.py      # WebSocket 狀態推播
 │   └── utils/
-│       └── datetime_utils.py  # 時間工具函數
+│       ├── datetime_utils.py          # 時間工具函數
+│       ├── hand_tracking_module.py    # MediaPipe 手勢追蹤模組
+│       └── drawing_engine.py          # 繪畫引擎核心
 ├── frontend/                  # 前端資源
 │   ├── templates/
-│   │   └── emotion_action.html # 主頁面模板
+│   │   └── index.html # 主頁面模板
 │   └── static/
 │       ├── style.css          # 基礎樣式
 │       ├── css/
-│       │   └── emotion_action.css # 頁面專用樣式
+│       │   ├── emotion_action.css     # 頁面專用樣式
+│       │   └── gesture-drawing.css    # 手勢繪畫樣式
 │       └── js/
-│           └── emotion_action.js  # 互動邏輯和 WebSocket 通訊
+│           ├── emotion_action.js      # 互動邏輯和 WebSocket 通訊
+│           └── modules/
+│               ├── shared/                # 共享服務（camera / transport / rendering）
+│               ├── emotion/               # 情緒分析控制器與展示器
+│               ├── gesture/               # 手勢繪畫控制器與展示器
+│               ├── emotion-upload.js      # 情緒檔案上傳模組
+│               ├── emotion-realtime.js    # 情緒即時分析入口
+│               ├── action-upload.js       # 動作檔案上傳模組
+│               ├── action-game.js         # 動作遊戲模組
+│               ├── rps-game.js            # 石頭剪刀布遊戲模組
+│               └── gesture-drawing.js     # 手勢繪畫入口
 ├── nginx/                     # Nginx 反向代理配置
 │   ├── nginx.conf            # 主配置文件
 │   ├── default.conf.template # 虛擬主機模板（支持環境變數）
@@ -87,7 +110,9 @@ expo-games/
 │   ├── substitute-env.sh     # 環境變數替換腳本
 │   └── ssl/                  # SSL 憑證存放目錄
 ├── docs/                     # 文檔
-│   └── architecture_overview.md # 系統架構說明
+│   ├── architecture-spec.md           # 全域架構規格
+│   ├── realtime-modules-architecture.md # 即時模組分層規劃
+│   └── websocket-protocol.md          # WebSocket 協議文檔
 ├── docker-compose.yml        # 容器編排配置
 ├── Dockerfile               # 應用程式容器建置
 ├── requirements.txt         # Python 依賴
@@ -157,12 +182,13 @@ CORS_ALLOW_ORIGINS=*        # 允許的跨域來源
 ### 情緒分析 API
 
 ```http
-POST /api/emotion/start                # 啟動即時情緒檢測
-POST /api/emotion/stop                 # 停止情緒檢測
-GET  /api/emotion/status               # 獲取檢測狀態
+# 圖片分析 API
 POST /api/emotion/analyze              # 完整分析上傳的圖片/影片
 POST /api/emotion/analyze/simple       # DeepFace 簡化分析 (推薦使用)
 POST /api/emotion/analyze/deepface      # DeepFace 完整分析
+
+# WebSocket 即時分析
+WS   /ws/emotion                # WebSocket即時情緒檢測
 
 # 簡化 API 回傳格式範例
 {
@@ -216,7 +242,10 @@ WS /ws/action               # 動作遊戲即時更新
 WS /ws/rps                  # 石頭剪刀布遊戲即時更新
 WS /ws/gesture              # 手勢識別即時更新
 WS /ws/drawing              # AI 繪畫即時更新
+WS /ws/drawing/gesture      # 手勢繪畫即時處理 (20 FPS)
 ```
+
+📋 **詳細 WebSocket 協議說明**: 請參考 [`docs/websocket-protocol.md`](docs/websocket-protocol.md)
 
 ## 🔧 開發指南
 
@@ -281,6 +310,24 @@ docker compose down
    - 查看容器狀態: `docker compose ps`
    - 監控系統資源使用情況
    - 定期備份配置和日誌
+
+## 🔧 故障排除
+
+### WebSocket 連接問題
+
+1. **"Unsupported message type" 錯誤**
+   - 確認前後端支援的消息類型一致
+   - 檢查 WebSocket 協議版本
+
+2. **連接頻繁斷開**
+   - 檢查網路穩定性
+   - 確認心跳機制正常運作
+   - 查看服務端 Docker 日誌: `docker compose logs -f`
+
+3. **手勢繪畫延遲**
+   - 降低攝影機幀率
+   - 檢查系統 CPU/GPU 使用率
+   - 優化圖片壓縮品質
 
 ## 🔮 擴展規劃
 

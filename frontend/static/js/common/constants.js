@@ -65,7 +65,7 @@ export const ANALYSIS_MODES = {
 
 // 串流配置
 export const STREAM_CONFIG = {
-    ANALYSIS_INTERVAL: 500, // 0.5秒
+    ANALYSIS_INTERVAL: 500, // 恢復為 0.5 秒
     VIDEO_WIDTH: 640,
     VIDEO_HEIGHT: 480,
     JPEG_QUALITY: 0.8

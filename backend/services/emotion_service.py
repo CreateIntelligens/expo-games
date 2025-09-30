@@ -7,32 +7,95 @@ from collections import deque
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
 
-# MediaPipe 依賴初始化（解決 CPU 環境相容性問題）
-os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
+from ..utils.gpu_runtime import configure_gpu_runtime
+
+_GPU_STATUS = configure_gpu_runtime()
+
+# MediaPipe 依賴初始化（GPU 加速設定在 backend.utils.gpu_runtime 中處理）
 try:  # pragma: no cover - 匯入狀態依賴執行環境
     import mediapipe as mp
 
     _MEDIAPIPE_AVAILABLE = True
     _MEDIAPIPE_ERROR: Optional[str] = None
 except Exception as exc:  # pragma: no cover - 匯入失敗時提供退回方案
-    mp = None
+    mp = SimpleNamespace(solutions=SimpleNamespace(face_mesh=None, hands=None))
     _MEDIAPIPE_AVAILABLE = False
     _MEDIAPIPE_ERROR = str(exc)
 
+# TensorFlow 記憶體配置 - 優先使用 CPU 避免 GPU OOM
+try:
+    import tensorflow as tf
+    import os
+
+    # 環境變數配置
+    os.environ['TF_DISABLE_TENSORBOARD'] = '1'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 減少日誌輸出
+
+    # 檢查是否強制使用 CPU
+    force_cpu = os.environ.get('EMOTION_FORCE_CPU', 'true').lower() == 'true'
+
+    if force_cpu:
+        print("🔄 強制使用 CPU 模式以避免 GPU 記憶體問題")
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # 隱藏所有 GPU
+        os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'false'
+    else:
+        print("🎮 嘗試使用 GPU 模式")
+        os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+        # GPU 記憶體控制
+        os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
+        os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
+
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus and not force_cpu:
+        try:
+            # 嘗試設定 GPU 記憶體限制
+            for gpu in gpus:
+                tf.config.set_logical_device_configuration(
+                    gpu,
+                    [tf.config.LogicalDeviceConfiguration(memory_limit=2048)]  # 降到 2GB
+                )
+
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+
+            print(f"✅ GPU 記憶體限制已設定 (2GB): {len(gpus)} 個 GPU 可用")
+
+            # 確認 GPU 真正可用於運算
+            with tf.device('/GPU:0'):
+                test_tensor = tf.constant([1.0, 2.0])
+                result = tf.square(test_tensor)
+                print(f"✅ GPU 運算測試通過: {result.numpy()}")
+
+            # 列出 TensorFlow 正在使用的設備
+            print(f"📊 可用的物理設備: {[dev.name for dev in tf.config.list_physical_devices()]}")
+            print(f"🎯 邏輯GPU設備: {[dev.name for dev in tf.config.list_logical_devices('GPU')]}")
+
+        except RuntimeError as e:
+            print(f"⚠️ GPU 記憶體配置失敗: {e}")
+    else:
+        print("ℹ️ 未檢測到 GPU，使用 CPU")
+
+except ImportError:
+    print("⚠️ TensorFlow 未安裝")
+
 # DeepFace 依賴初始化 (人臉情緒分析)
+_EMOTION_MODEL = None
 try:
     from deepface import DeepFace
-    # 預先加載模型，避免首次請求時延遲
-    DeepFace.build_model("Emotion")
+    # 注意：新版DeepFace (0.0.85+) 可能移除了build_model方法
+    # 先檢查DeepFace是否可用，模型將在第一次調用時自動加載
     _DEEPFACE_AVAILABLE = True
     _DEEPFACE_ERROR: Optional[str] = None
-    logging.info("DeepFace 人臉分析已啟用")
+    logging.info("DeepFace 已就緒，模型將在首次使用時加載")
 except Exception as exc:
     DeepFace = None
+    _EMOTION_MODEL = None
     _DEEPFACE_AVAILABLE = False
     _DEEPFACE_ERROR = str(exc)
     logging.warning(f"DeepFace 不可用: {exc}")
@@ -42,6 +105,16 @@ from ..utils.datetime_utils import _now_ts
 
 
 logger = logging.getLogger(__name__)
+
+if _GPU_STATUS.warnings:
+    for warning in _GPU_STATUS.warnings:
+        logger.warning("GPU setup warning: %s", warning)
+else:
+    logger.info(
+        "GPU runtime ready | TensorFlow devices: %s | MediaPipe GPU enabled: %s",
+        _GPU_STATUS.tensorflow_devices,
+        _GPU_STATUS.mediapipe_gpu_enabled,
+    )
 
 
 class EmotionType(Enum):
@@ -60,10 +133,10 @@ EMOTION_TRANSLATIONS = {
     "開心": {"en": "happy", "zh": "開心", "emoji": "😊"},
     "悲傷": {"en": "sad", "zh": "悲傷", "emoji": "😢"},
     "生氣": {"en": "angry", "zh": "生氣", "emoji": "😠"},
-    "驚訝": {"en": "surprised", "zh": "驚訝", "emoji": "😲"},
-    "恐懼": {"en": "fearful", "zh": "恐懼", "emoji": "😨"},
-    "厭惡": {"en": "disgusted", "zh": "厭惡", "emoji": "🤢"},
-    "中性": {"en": "neutral", "zh": "中性", "emoji": "😐"}
+    "驚訝": {"en": "surprise", "zh": "驚訝", "emoji": "😲"},
+    "恐懼": {"en": "fear", "zh": "恐懼", "emoji": "😨"},
+    "厭惡": {"en": "disgust", "zh": "厭惡", "emoji": "🤢"},
+    "中性": {"en": "neutral", "zh": "面無表情", "emoji": "😐"}
 }
 
 
@@ -491,225 +564,9 @@ class EmotionService:
                 self.feature_extractor.init_error,
             )
 
-        # 服務狀態
-        self.is_detecting = False
-        self.detection_thread = None
-        self.camera = None
+        # 簡化的服務設計：只處理圖片分析，不管理攝影機或檢測狀態
 
-        # 檢測統計
-        self.detection_start_time = None
-        self.total_detections = 0
-        self.emotion_summary = {}
-
-    def start_emotion_detection(self, duration: Optional[int] = None) -> Dict:
-        """開始情緒檢測"""
-        if not self.feature_extractor.is_available():
-            error_msg = self.feature_extractor.init_error or "MediaPipe FaceMesh 初始化失敗"
-            return {
-                "status": "error",
-                "message": f"無法啟動情緒檢測: {error_msg}",
-            }
-
-        if self.is_detecting:
-            return {"status": "error", "message": "情緒檢測已在進行中"}
-
-        try:
-            # 開啟攝影機
-            self.camera = cv2.VideoCapture(0)
-            if not self.camera.isOpened():
-                # 嘗試檢測是否有可用的攝影機設備
-                import os
-                video_devices = []
-                for i in range(5):  # 檢查 /dev/video0 到 /dev/video4
-                    if os.path.exists(f'/dev/video{i}'):
-                        video_devices.append(f'/dev/video{i}')
-
-                if not video_devices:
-                    return {
-                        "status": "error",
-                        "message": "錯了"
-                    }
-                else:
-                                      return {
-                        "status": "error",
-                        "message": f"無法開啟攝影機。找到設備：{', '.join(video_devices)}，但無法訪問"
-                    }
-
-            # 設定攝影機參數
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            self.camera.set(cv2.CAP_PROP_FPS, 30)
-
-            # 重置統計
-            self.detection_start_time = time.time()
-            self.total_detections = 0
-            self.emotion_summary = {}
-
-            # 開始檢測線程
-            self.is_detecting = True
-            self.detection_thread = threading.Thread(
-                target=self._detection_loop,
-                args=(duration,),
-                daemon=True
-            )
-            self.detection_thread.start()
-
-            # 廣播開始狀態
-            self.status_broadcaster.broadcast_threadsafe({
-                "channel": "emotion",
-                "stage": "started",
-                "message": "情緒檢測已開始",
-                "data": {
-                    "duration": duration,
-                    "start_time": self.detection_start_time
-                }
-            })
-
-            return {
-                "status": "started",
-                "message": "情緒檢測已開始",
-                "duration": duration
-            }
-
-        except Exception as exc:
-            self.is_detecting = False
-            return {"status": "error", "message": f"啟動失敗: {str(exc)}"}
-
-    def stop_emotion_detection(self) -> Dict:
-        """停止情緒檢測"""
-        if not self.is_detecting:
-            return {"status": "idle", "message": "情緒檢測未在進行中"}
-
-        self.is_detecting = False
-
-        if self.camera:
-            self.camera.release()
-            self.camera = None
-
-        if self.detection_thread:
-            self.detection_thread.join(timeout=2)
-
-        # 生成最終報告
-        total_time = time.time() - self.detection_start_time if self.detection_start_time else 0
-
-        # 廣播停止狀態
-        self.status_broadcaster.broadcast_threadsafe({
-            "channel": "emotion",
-            "stage": "stopped",
-            "message": "情緒檢測已停止",
-            "data": {
-                "total_time": total_time,
-                "total_detections": self.total_detections,
-                "emotion_summary": self.emotion_summary,
-                "emotion_trend": self.emotion_detector.get_emotion_trend()
-            }
-        })
-
-        return {
-            "status": "stopped",
-            "message": "情緒檢測已停止",
-            "summary": {
-                "total_time": total_time,
-                "total_detections": self.total_detections,
-                "emotion_summary": self.emotion_summary
-            }
-        }
-
-    def get_detection_status(self) -> Dict:
-        """獲取檢測狀態"""
-        if not self.is_detecting:
-            return {
-                "status": "idle",
-                "message": "情緒檢測未在進行中",
-                "is_detecting": False
-            }
-
-        current_time = time.time()
-        detection_duration = current_time - self.detection_start_time if self.detection_start_time else 0
-
-        return {
-            "status": "detecting",
-            "message": "情緒檢測進行中",
-            "is_detecting": True,
-            "detection_duration": detection_duration,
-            "total_detections": self.total_detections,
-            "emotion_trend": self.emotion_detector.get_emotion_trend(),
-            "current_summary": self.emotion_summary
-        }
-
-    def _detection_loop(self, duration: Optional[int] = None):
-        """檢測循環 (在背景線程中運行)"""
-        frame_count = 0
-        last_broadcast_time = 0
-
-        try:
-            while self.is_detecting and self.camera and self.camera.isOpened():
-                # 檢查時間限制
-                if duration and (time.time() - self.detection_start_time) >= duration:
-                    break
-
-                ret, frame = self.camera.read()
-                if not ret:
-                    break
-
-                frame_count += 1
-
-                # 每3幀檢測一次 (降低計算負擔)
-                if frame_count % 3 == 0:
-                    # 提取特徵
-                    features = self.feature_extractor.extract_features(frame)
-
-                    if features:
-                        # 檢測情緒
-                        emotion, confidence = self.emotion_detector.detect_emotion(features)
-                        self.total_detections += 1
-
-                        # 更新統計
-                        emotion_name = emotion.value
-                        if emotion_name not in self.emotion_summary:
-                            self.emotion_summary[emotion_name] = 0
-                        self.emotion_summary[emotion_name] += 1
-
-                        # 定期廣播結果 (每2秒)
-                        current_time = time.time()
-                        if current_time - last_broadcast_time >= 2.0:
-                            trend_data = self.emotion_detector.get_emotion_trend()
-
-                            self.status_broadcaster.broadcast_threadsafe({
-                                "channel": "emotion",
-                                "stage": "detecting",
-                                "message": f"檢測到情緒: {emotion_name}",
-                                "data": {
-                                    "current_emotion": emotion_name,
-                                    "confidence": round(confidence, 3),
-                                    "detection_count": self.total_detections,
-                                    "detection_duration": current_time - self.detection_start_time,
-                                    "trend": trend_data,
-                                    "emotion_summary": self.emotion_summary,
-                                    "features": {k: round(float(v), 4) for k, v in features.items()},
-                                    "scores": self.emotion_detector.get_latest_scores(),
-                                }
-                            })
-
-                            last_broadcast_time = current_time
-
-                # 控制幀率
-                time.sleep(1/30)  # 30 FPS
-
-        except Exception as exc:
-            self.status_broadcaster.broadcast_threadsafe({
-                "channel": "emotion",
-                "stage": "error",
-                "message": f"檢測錯誤: {str(exc)}"
-            })
-        finally:
-            if self.camera:
-                self.camera.release()
-                self.camera = None
-
-            # 自動停止
-            if self.is_detecting:
-                self.stop_emotion_detection()
+    # 移除了攝影機相關功能，保持服務簡潔專注於圖片分析
 
     def analyze_image(self, image_path: str) -> Dict:
         """
@@ -962,6 +819,7 @@ class EmotionService:
         # 限制最多顯示10個關鍵時刻
         return key_moments[:10]
 
+
     def _create_simple_result(self, emotion: str, confidence: float) -> Dict:
         """
         創建簡化的情緒分析結果，只包含核心信息
@@ -1180,7 +1038,8 @@ class EmotionService:
         Returns:
             DeepFace 分析結果
         """
-        if not _DEEPFACE_AVAILABLE:
+
+        if not _DEEPFACE_AVAILABLE and DeepFace is None:
             return {
                 "emotion_zh": "中性",
                 "emotion_en": "neutral",
@@ -1190,19 +1049,28 @@ class EmotionService:
             }
 
         try:
-            # DeepFace可以直接分析檔案路徑 - 只做情緒分析
-            analysis = DeepFace.analyze(
+            # 導入 TensorFlow 用於記憶體管理
+            import tensorflow as tf
+
+            analyze_kwargs = dict(
                 img_path=image_path,
                 actions=['emotion'],
-                enforce_detection=True
+                enforce_detection=False,  # 更寬鬆的人臉檢測
+                detector_backend='opencv',  # 使用 GPU 友好的 detector
             )
 
+            if _GPU_STATUS.tensorflow_ready:
+                with tf.device('/GPU:0'):
+                    analysis = DeepFace.analyze(**analyze_kwargs)
+            else:
+                analysis = DeepFace.analyze(**analyze_kwargs)
+
             # DeepFace 返回一個列表，每個元素是一張臉的分析結果
-            if not analysis or not isinstance(analysis, list):
+            if not analysis or not isinstance(analysis, list) or len(analysis) == 0:
                 return {
-                    "emotion_zh": "中性",
-                    "emotion_en": "neutral",
-                    "emoji": "😐",
+                    "emotion_zh": "未檢測到",
+                    "emotion_en": "not_detected",
+                    "emoji": "❓",
                     "confidence": 0.0,
                     "error": "未檢測到人臉",
                     "engine": "deepface",
@@ -1211,11 +1079,37 @@ class EmotionService:
 
             # 我們只取第一張臉的結果
             result = analysis[0]
+
+            # 檢查是否有有效的臉部檢測結果
+            if 'dominant_emotion' not in result or 'emotion' not in result:
+                return {
+                    "emotion_zh": "未檢測到",
+                    "emotion_en": "not_detected",
+                    "emoji": "❓",
+                    "confidence": 0.0,
+                    "error": "臉部檢測失敗",
+                    "engine": "deepface",
+                    "face_detected": False
+                }
+
             dominant_emotion_en = result['dominant_emotion']
             confidence = result['emotion'][dominant_emotion_en] / 100.0
 
+            # 如果所有情緒的信心度都很低（都接近0），表示實際上沒有檢測到臉
+            all_emotions_low = all(score <= 1.0 for score in result['emotion'].values())  # 1%以下算作未檢測
+            if confidence <= 0.01 or all_emotions_low:  # 信心度小於1%或所有情緒都很低
+                return {
+                    "emotion_zh": "未檢測到",
+                    "emotion_en": "not_detected",
+                    "emoji": "❓",
+                    "confidence": 0.0,
+                    "error": "未檢測到有效的人臉特徵",
+                    "engine": "deepface",
+                    "face_detected": False
+                }
+
             # 英文轉中文
-            emotion_zh = "中性" # 預設值
+            emotion_zh = "面無表情" # 預設值
             for zh, details in EMOTION_TRANSLATIONS.items():
                 if details['en'] == dominant_emotion_en:
                     emotion_zh = zh
@@ -1262,6 +1156,12 @@ class EmotionService:
                 race_confidence = 0.0
                 race_scores = {}
 
+            # 分析完成後清理 TensorFlow session（防止記憶體累積）
+            try:
+                tf.keras.backend.clear_session()
+            except:
+                pass  # 如果清理失敗也不影響結果
+
             return {
                 "emotion_zh": emotion_zh,
                 "emotion_en": dominant_emotion_en,
@@ -1274,8 +1174,16 @@ class EmotionService:
 
         except Exception as exc:
             logger.error(f"DeepFace 分析失敗: {exc}")
+
+            # 錯誤時也清理 session（防止記憶體洩漏）
+            try:
+                import tensorflow as tf
+                tf.keras.backend.clear_session()
+            except:
+                pass
+
             return {
-                "emotion_zh": "中性",
+                "emotion_zh": "面無表情",
                 "emotion_en": "neutral",
                 "emoji": "😐",
                 "confidence": 0.0,

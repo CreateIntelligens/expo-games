@@ -4,309 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Expo Games WebSocket API 文檔</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: #f8f9fa;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 40px 0;
-            text-align: center;
-            margin-bottom: 30px;
-            border-radius: 10px;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            font-size: 1.2em;
-            opacity: 0.9;
-        }
-
-        .endpoint-card {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-
-        .endpoint-header {
-            background: #f8f9fa;
-            padding: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid #e9ecef;
-        }
-
-        .endpoint-header:hover {
-            background: #e9ecef;
-        }
-
-        .endpoint-method {
-            background: #6c757d;
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            font-weight: bold;
-        }
-
-        .endpoint-url {
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-            color: #495057;
-        }
-
-        .endpoint-description {
-            color: #6c757d;
-            margin-top: 5px;
-        }
-
-        .endpoint-content {
-            display: none;
-            padding: 20px;
-        }
-
-        .endpoint-content.active {
-            display: block;
-        }
-
-        .section {
-            margin-bottom: 30px;
-        }
-
-        .section h3 {
-            color: #495057;
-            border-bottom: 2px solid #e9ecef;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }
-
-        .message-example {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 10px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            overflow-x: auto;
-        }
-
-        .message-type {
-            font-weight: bold;
-            color: #495057;
-            margin-bottom: 5px;
-        }
-
-        .code-block {
-            background: #2d3748;
-            color: #e2e8f0;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 10px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            overflow-x: auto;
-        }
-
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-
-        .status-connected {
-            background: #48bb78;
-        }
-
-        .status-disconnected {
-            background: #f56565;
-        }
-
-        .status-connecting {
-            background: #ed8936;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
-        .test-section {
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-
-        .test-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: background 0.2s;
-        }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5a67d8;
-        }
-
-        .btn-success {
-            background: #48bb78;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #38a169;
-        }
-
-        .btn-danger {
-            background: #f56565;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #e53e3e;
-        }
-
-        .log-area {
-            background: #1a202c;
-            color: #e2e8f0;
-            font-family: 'Courier New', monospace;
-            font-size: 0.8em;
-            padding: 10px;
-            border-radius: 4px;
-            height: 200px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-
-        .input-group {
-            margin-bottom: 10px;
-        }
-
-        .input-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-
-        .input-group input, .input-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #e2e8f0;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-        }
-
-        .toggle-arrow {
-            transition: transform 0.2s;
-        }
-
-        .toggle-arrow.active {
-            transform: rotate(90deg);
-        }
-
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-        }
-
-        .table th, .table td {
-            border: 1px solid #e2e8f0;
-            padding: 8px 12px;
-            text-align: left;
-        }
-
-        .table th {
-            background: #f7fafc;
-            font-weight: bold;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 0.8em;
-            font-weight: bold;
-        }
-
-        .badge-success {
-            background: #c6f6d5;
-            color: #22543d;
-        }
-
-        .badge-error {
-            background: #fed7d7;
-            color: #742a2a;
-        }
-
-        .badge-info {
-            background: #bee3f8;
-            color: #2a4365;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-
-            .header h1 {
-                font-size: 2em;
-            }
-
-            .test-controls {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/websocket-docs.css">
+    <script src="/static/js/websocket-docs.js"></script>
 </head>
 <body>
     <div class="container">
@@ -346,7 +45,7 @@
             <div class="endpoint-header" onclick="toggleEndpoint(this)">
                 <div>
                     <span class="endpoint-method">WS</span>
-                    <span class="endpoint-url">/ws/emotion/stream</span>
+                    <span class="endpoint-url">/ws/emotion</span>
                     <div class="endpoint-description">即時情緒分析串流</div>
                 </div>
                 <span class="toggle-arrow">▶</span>
@@ -367,13 +66,16 @@
   "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ...",
   "timestamp": 1640995200.123
 }</pre>
+                        <p><strong>說明</strong>：持續發送攝影機幀進行即時分析，建議 5-10 FPS</p>
                     </div>
 
                     <div class="message-example">
-                        <div class="message-type">心跳訊息 (Ping Message)</div>
+                        <div class="message-type">心跳訊息 (Ping Message - 可選)</div>
                         <pre>{
-  "type": "ping"
+  "type": "ping",
+  "timestamp": 1640995200.123
 }</pre>
+                        <p><strong>說明</strong>：心跳為可選功能，因為持續的幀數據已起到保活作用</p>
                     </div>
                 </div>
 
@@ -405,7 +107,40 @@
                     <div class="message-example">
                         <div class="message-type">心跳回應 (Pong Response)</div>
                         <pre>"pong"</pre>
+                        <p><strong>說明</strong>：服務端回應純文本 "pong"，不是 JSON 格式</p>
                     </div>
+                </div>
+
+                <div class="section">
+                    <h3>🔌 連接管理</h3>
+                    
+                    <h4>連接方式</h4>
+                    <div class="code-block">// 直接連接，無需 open 訊息
+const ws = new WebSocket('ws://localhost:8896/ws/emotion');
+
+ws.onopen = () => {
+    console.log('已連接，可以開始發送影像幀');
+    // 無需發送 open 訊息，直接發送 frame
+};
+</div>
+
+                    <h4>停止會話</h4>
+                    <div class="code-block">// 方法 1: 直接關閉連接（推薦）
+ws.close(1000, '用戶主動關閉');
+
+// 方法 2: 停止發送幀，保持連接
+// 只要停止發送 frame 訊息即可，不需要特殊的停止訊息
+clearInterval(frameInterval);
+</div>
+
+                    <h4>心跳機制（可選）</h4>
+                    <div class="code-block">// 如果需要額外的心跳保活
+setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+    }
+}, 30000); // 每 30 秒一次
+</div>
                 </div>
 
                 <div class="section">
@@ -413,7 +148,7 @@
                     <table class="table">
                         <tr><th>參數</th><th>建議值</th><th>說明</th></tr>
                         <tr><td>幀率</td><td>5-10 FPS</td><td>視網路和處理能力而定</td></tr>
-                        <tr><td>影像解析度</td><td>640x480</td><td>平衡品質和效能</td></tr>
+                        <tr><td>影像解析度</td><td>動態適應</td><td>自動適應攝影機實際解析度 (如 1920x1080, 1280x720 等)</td></tr>
                         <tr><td>壓縮品質</td><td>0.8 JPEG</td><td>平衡檔案大小和品質</td></tr>
                         <tr><td>網路延遲</td><td>< 200ms</td><td>建議延遲上限</td></tr>
                     </table>
@@ -421,23 +156,63 @@
 
                 <div class="section">
                     <h3>💻 使用範例</h3>
-                    <div class="code-block">// JavaScript 發送影像幀範例
-function sendFrame(videoElement) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 480;
-    const ctx = canvas.getContext('2d');
+                    <div class="code-block">// JavaScript 動態解析度影像串流範例
+class EmotionStreamClient {
+    constructor() {
+        this.websocket = null;
+        this.videoSize = [640, 480]; // 默認值，會動態調整
+        this.captureCanvas = null;
+        this.captureContext = null;
+    }
 
-    ctx.drawImage(videoElement, 0, 0, 640, 480);
-    const imageData = canvas.toDataURL('image/jpeg', 0.8);
+    async initializeCamera() {
+        // 請求攝影機權限
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 } }
+        });
 
-    const message = {
-        type: 'frame',
-        image: imageData,
-        timestamp: Date.now() / 1000
-    };
+        // 動態獲取實際解析度
+        const videoTrack = stream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        this.videoSize = [
+            settings.width || 640,
+            settings.height || 480
+        ];
 
-    websocket.send(JSON.stringify(message));
+        console.log('攝影機實際解析度:', this.videoSize);
+
+        // 創建動態尺寸的捕獲畫布
+        this.captureCanvas = document.createElement('canvas');
+        this.captureCanvas.width = this.videoSize[0];
+        this.captureCanvas.height = this.videoSize[1];
+        this.captureContext = this.captureCanvas.getContext('2d');
+
+        // 設置video元素
+        const videoElement = document.createElement('video');
+        videoElement.srcObject = stream;
+        videoElement.play();
+
+        return videoElement;
+    }
+
+    startStreaming(videoElement) {
+        // 定期發送影像幀
+        setInterval(() => {
+            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                // 使用動態解析度捕獲影像
+                this.captureContext.drawImage(videoElement, 0, 0, this.videoSize[0], this.videoSize[1]);
+                const imageData = this.captureCanvas.toDataURL('image/jpeg', 0.8);
+
+                const message = {
+                    type: 'frame',
+                    image: imageData,
+                    timestamp: Date.now() / 1000
+                };
+
+                this.websocket.send(JSON.stringify(message));
+            }
+        }, 200); // 5 FPS
+    }
 }</div>
                 </div>
             </div>
@@ -635,6 +410,201 @@ function sendFrame(videoElement) {
             </div>
         </div>
 
+        <!-- 手勢繪畫 WebSocket -->
+        <div class="endpoint-card">
+            <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                <div>
+                    <span class="endpoint-method">WS</span>
+                    <span class="endpoint-url">/ws/drawing/gesture</span>
+                    <div class="endpoint-description">即時手勢繪畫控制</div>
+                </div>
+                <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="endpoint-content">
+                <div class="section">
+                    <h3>📋 功能說明</h3>
+                    <p>處理即時手勢控制的繪畫功能，支援空中手勢繪畫、顏色選擇和畫布清空。</p>
+                </div>
+
+                <div class="section">
+                    <h3>📤 客戶端發送訊息</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">啟動手勢繪畫 (Start Gesture Drawing)</div>
+                        <pre>{
+  "type": "start_gesture_drawing",
+  "mode": "gesture_control",
+  "color": "blue",
+  "canvas_size": [720, 1280],
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">攝影機幀 (Camera Frame)</div>
+                        <pre>{
+  "type": "camera_frame",
+  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ...",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">停止繪畫 (Stop Drawing)</div>
+                        <pre>{
+  "type": "stop_drawing",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>📥 服務器回應訊息</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">繪畫開始確認 (Drawing Started)</div>
+                        <pre>{
+  "type": "drawing_started",
+  "session_id": "gesture_12345",
+  "canvas_size": [720, 1280],
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">手勢狀態更新 (Gesture Status)</div>
+                        <pre>{
+  "type": "gesture_status",
+  "current_gesture": "drawing",
+  "fingers_up": [false, true, false, false, false],
+  "drawing_position": [320, 240],
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">畫布更新 (Canvas Update)</div>
+                        <pre>{
+  "type": "canvas_update",
+  "canvas_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+  "stroke_count": 15,
+  "current_color": "blue",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">AI識別結果 (AI Recognition)</div>
+                        <pre>{
+  "type": "recognition_result",
+  "recognized_shape": "circle",
+  "confidence": 0.87,
+  "message": "我看到一個圓形！(非常確定)",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">錯誤訊息 (Error Message)</div>
+                        <pre>{
+  "type": "error",
+  "message": "MediaPipe 初始化失敗",
+  "error_code": "MEDIA_PIPE_ERROR",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🤏 手勢說明</h3>
+                    <table class="table">
+                        <tr>
+                            <th>手勢</th>
+                            <th>說明</th>
+                            <th>對應動作</th>
+                        </tr>
+                        <tr>
+                            <td><strong>👆 食指伸出</strong></td>
+                            <td>僅食指伸直，其他手指彎曲</td>
+                            <td>繪畫模式 - 使用食指尖端繪畫</td>
+                        </tr>
+                        <tr>
+                            <td><strong>✌️ 雙指伸出</strong></td>
+                            <td>食指和中指伸直</td>
+                            <td>選擇模式 - 橡皮擦功能</td>
+                        </tr>
+                        <tr>
+                            <td><strong>✋ 五指全開</strong></td>
+                            <td>所有手指完全伸直</td>
+                            <td>清空模式 - 清空整個畫布</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="section">
+                    <h3>⚙️ 效能參數</h3>
+                    <table class="table">
+                        <tr><th>參數</th><th>建議值</th><th>說明</th></tr>
+                        <tr><td>幀率</td><td>20-30 FPS</td><td>平衡即時性和處理效能</td></tr>
+                        <tr><td>影像解析度</td><td>動態適應</td><td>自動適應攝影機實際解析度 (如 1920x1080, 1280x720 等)</td></tr>
+                        <tr><td>手勢穩定性</td><td>3幀確認</td><td>避免抖動誤觸</td></tr>
+                        <tr><td>網路延遲</td><td>< 50ms</td><td>確保即時互動體驗</td></tr>
+                    </table>
+                </div>
+
+                <div class="section">
+                    <h3>💻 使用範例</h3>
+                    <div class="code-block">// JavaScript 手勢繪畫整合範例
+class GestureDrawingClient {
+    constructor() {
+        this.ws = null;
+        this.canvas = document.getElementById('drawing-canvas');
+        this.setupWebSocket();
+        this.setupCamera();
+    }
+
+    setupWebSocket() {
+        this.ws = new WebSocket('ws://localhost:8896/ws/drawing/gesture');
+
+        this.ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            this.handleServerMessage(data);
+        };
+    }
+
+    async startDrawing() {
+        // 啟動攝影機
+        const stream = await navigator.mediaDevices.getUserMedia({video: true});
+        this.videoElement.srcObject = stream;
+
+        // 發送啟動訊息
+        this.ws.send(JSON.stringify({
+            type: 'start_gesture_drawing',
+            mode: 'gesture_control',
+            color: 'blue',
+            canvas_size: [720, 1280],
+            timestamp: Date.now() / 1000
+        }));
+    }
+
+    handleServerMessage(data) {
+        switch(data.type) {
+            case 'canvas_update':
+                this.updateCanvas(data.canvas_base64);
+                break;
+            case 'gesture_status':
+                this.updateGestureHints(data.current_gesture);
+                break;
+            case 'recognition_result':
+                this.showRecognitionResult(data);
+                break;
+        }
+    }
+}</div>
+                </div>
+            </div>
+        </div>
+
         <!-- 關閉代碼參考 -->
         <div class="endpoint-card">
             <div class="endpoint-header" onclick="toggleEndpoint(this)">
@@ -687,139 +657,5 @@ function sendFrame(videoElement) {
             </div>
         </div>
     </div>
-
-    <script>
-        let websocket = null;
-        let reconnectInterval = null;
-
-        // DOM 元素
-        const connectionStatus = document.getElementById('connectionStatus');
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
-        const clearLogBtn = document.getElementById('clearLogBtn');
-        const logArea = document.getElementById('logArea');
-        const wsUrlInput = document.getElementById('wsUrl');
-
-        // 事件監聽器
-        connectBtn.addEventListener('click', connectWebSocket);
-        disconnectBtn.addEventListener('click', disconnectWebSocket);
-        clearLogBtn.addEventListener('click', clearLog);
-
-        // 切換端點內容
-        function toggleEndpoint(header) {
-            const content = header.nextElementSibling;
-            const arrow = header.querySelector('.toggle-arrow');
-
-            content.classList.toggle('active');
-            arrow.classList.toggle('active');
-        }
-
-        // 連接 WebSocket
-        function connectWebSocket() {
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                log('已經連接了');
-                return;
-            }
-
-            const url = wsUrlInput.value;
-            log(`嘗試連接: ${url}`);
-
-            updateConnectionStatus('connecting');
-
-            try {
-                websocket = new WebSocket(url);
-
-                websocket.onopen = function(event) {
-                    log('✅ WebSocket 連接成功');
-                    updateConnectionStatus('connected');
-                    connectBtn.disabled = true;
-                    disconnectBtn.disabled = false;
-                };
-
-                websocket.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        log(`📨 收到訊息: ${JSON.stringify(data, null, 2)}`);
-                    } catch (e) {
-                        log(`📨 收到文字訊息: ${event.data}`);
-                    }
-                };
-
-                websocket.onclose = function(event) {
-                    log(`🔌 連接關閉: 代碼=${event.code}, 原因=${event.reason}`);
-                    updateConnectionStatus('disconnected');
-                    connectBtn.disabled = false;
-                    disconnectBtn.disabled = true;
-                };
-
-                websocket.onerror = function(error) {
-                    log(`❌ WebSocket 錯誤: ${error}`);
-                    updateConnectionStatus('disconnected');
-                };
-
-            } catch (error) {
-                log(`❌ 連接失敗: ${error.message}`);
-                updateConnectionStatus('disconnected');
-            }
-        }
-
-        // 斷開 WebSocket
-        function disconnectWebSocket() {
-            if (websocket) {
-                log('🔌 正在關閉連接...');
-                websocket.close(1000, '用戶手動關閉');
-                websocket = null;
-            }
-            connectBtn.disabled = false;
-            disconnectBtn.disabled = true;
-        }
-
-        // 更新連接狀態
-        function updateConnectionStatus(status) {
-            connectionStatus.className = `status-indicator status-${status}`;
-
-            const statusText = {
-                'connected': '已連接',
-                'disconnected': '未連接',
-                'connecting': '連接中'
-            };
-
-            connectionStatus.title = statusText[status] || status;
-        }
-
-        // 日誌記錄
-        function log(message) {
-            const timestamp = new Date().toLocaleTimeString();
-            logArea.textContent += `[${timestamp}] ${message}\n`;
-            logArea.scrollTop = logArea.scrollHeight;
-        }
-
-        // 清除日誌
-        function clearLog() {
-            logArea.textContent = '';
-        }
-
-        // 頁面載入時初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            // 自動設定 WebSocket URL
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host;
-            wsUrlInput.value = `${protocol}//${host}/ws/emotion/stream`;
-
-            updateConnectionStatus('disconnected');
-            connectBtn.disabled = false;
-            disconnectBtn.disabled = true;
-
-            log('WebSocket API 文檔頁面已載入');
-            log('點擊"連接"按鈕來測試 WebSocket 連接');
-        });
-
-        // 頁面離開時清理
-        window.addEventListener('beforeunload', function() {
-            if (websocket) {
-                websocket.close();
-            }
-        });
-    </script>
 </body>
 </html>

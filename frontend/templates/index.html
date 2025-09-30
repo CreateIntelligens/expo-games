@@ -6,6 +6,7 @@
     <title>{{ title }}</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/css/emotion_action.css">
+    <link rel="stylesheet" href="/static/css/gesture-drawing.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
 </head>
 <body class="expo-shell">
@@ -21,12 +22,6 @@
                     <button type="button" class="chip mode-btn" data-mode="action">動作偵測</button>
                     <button type="button" class="chip mode-btn" data-mode="rps">石頭剪刀布</button>
                     <button type="button" class="chip mode-btn" data-mode="drawing">AI 畫布</button>
-                </div>
-            </div>
-            <div class="console-status" aria-live="polite">
-                <h3>系統狀態</h3>
-                <div id="status-container">
-                    <div class="status-message">請選擇分析模式開始...</div>
                 </div>
             </div>
         </section>
@@ -101,10 +96,6 @@
 
                     <div class="tab-content" id="webcam-tab">
                         <div class="realtime-controls">
-                            <div class="form-group">
-                                <label for="emotion-duration">檢測時長（秒，留空為無限期）：</label>
-                                <input type="number" id="emotion-duration" name="duration" min="10" max="300" placeholder="無限期">
-                            </div>
                             <div class="control-buttons">
                                 <button type="button" class="btn primary" id="start-emotion-btn">開始情緒檢測</button>
                                 <button type="button" class="btn secondary" id="stop-emotion-btn" disabled>停止檢測</button>
@@ -120,11 +111,14 @@
                                     <span id="detection-count">0</span> 次檢測
                                 </div>
                             </div>
+                            <div class="camera-container">
+                                <!-- 攝影機畫面會插入這裡 -->
+                            </div>
                             <div class="emotion-display">
-                                <div class="emotion-icon" id="emotion-icon">😐</div>
+                                <div class="emotion-icon" id="emotion-icon">🎭</div>
                                 <div class="emotion-info">
-                                    <div class="emotion-name" id="emotion-name">中性</div>
-                                    <div class="emotion-confidence">信心度: <span id="emotion-confidence">50%</span></div>
+                                    <div class="emotion-name" id="emotion-name">等待檢測</div>
+                                    <div class="emotion-confidence">信心度: <span id="emotion-confidence">0%</span></div>
                                 </div>
                             </div>
                             <div class="emotion-trend">
@@ -361,71 +355,80 @@
                 </header>
 
                 <div class="panel-body">
-                    <div class="drawing-controls">
-                        <div class="form-group">
-                            <label for="drawing-mode-select">繪畫模式：</label>
-                            <select id="drawing-mode-select" name="mode">
-                                <option value="index_finger" selected>👆 食指繪畫</option>
-                                <option value="gesture_control">✋ 手勢控制 (食指畫/雙指擦/五指清空)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="drawing-color-select">繪畫顏色：</label>
-                            <select id="drawing-color-select" name="color">
-                                <option value="black" selected>⚫ 黑色</option>
-                                <option value="red">🔴 紅色</option>
-                                <option value="blue">🔵 藍色</option>
-                                <option value="green">🟢 綠色</option>
-                                <option value="yellow">🟡 黃色</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="drawing-auto-recognize" checked>
-                                <span class="checkmark"></span>
-                                自動識別 (每3秒)
-                            </label>
-                        </div>
-                        <div class="control-buttons">
-                            <button type="button" class="btn primary" id="start-drawing-btn">開始繪畫</button>
-                            <button type="button" class="btn secondary" id="stop-drawing-btn" disabled>停止會話</button>
-                            <button type="button" class="btn ghost" id="clear-canvas-btn" disabled>清空畫布</button>
-                            <button type="button" class="btn ghost" id="recognize-drawing-btn" disabled>立即識別</button>
-                        </div>
-                    </div>
-
-                    <div class="drawing-display hidden" id="drawing-display">
-                        <div class="drawing-header">
-                            <h3>🎨 繪畫中</h3>
-                            <div class="drawing-stats">
-                                <span>模式: <span id="drawing-current-mode">食指繪畫</span></span>
-                                <span class="divider"></span>
-                                <span>顏色: <span id="drawing-current-color">黑色</span></span>
-                                <span class="divider"></span>
-                                <span>筆劃: <span id="drawing-stroke-count">0</span></span>
+                        <!-- 手勢繪畫控制面板 -->
+                        <div class="gesture-drawing-controls">
+                            <!-- 控制按鈕區域 -->
+                            <div class="control-buttons">
+                                <button type="button" class="btn primary" id="start-gesture-drawing">開始手勢繪畫</button>
+                                <button type="button" class="btn secondary" id="stop-gesture-drawing" disabled>停止繪畫</button>
                             </div>
                         </div>
 
-                        <div class="drawing-canvas-container">
-                            <div class="canvas-placeholder" id="drawing-canvas-display">
-                                <div class="canvas-message">畫布預覽區域<br><small>攝影機檢測到手指動作時會顯示繪畫內容</small></div>
+                        <div class="gesture-drawing-display hidden" id="gesture-drawing-display">
+                            <div class="gesture-drawing-header">
+                                <h3>🎨 手勢繪畫</h3>
+                                <div class="gesture-drawing-stats">
+                                    <span>模式: <span id="gesture-current-mode">手勢控制</span></span>
+                                    <span class="divider"></span>
+                                    <span>顏色: <span id="gesture-current-color">黑色</span></span>
+                                    <span class="divider"></span>
+                                    <span>筆劃: <span id="gesture-stroke-count">0</span></span>
+                                </div>
+                            </div>
+
+                            <div class="gesture-drawing-layout">
+                                <div class="gesture-camera-section">
+                                    <div class="gesture-camera-container">
+                                        <!-- 顏色選擇工具列覆蓋層 -->
+                                        <div class="color-toolbar" id="gesture-color-toolbar">
+                                            <div class="color-zone active" data-color="black" style="background-color: #111827;">
+                                                <span style="color: white; font-weight: bold;">黑</span>
+                                            </div>
+                                            <div class="color-zone" data-color="red" style="background-color: #ef4444;">
+                                                <span style="color: white; font-weight: bold;">紅</span>
+                                            </div>
+                                            <div class="color-zone" data-color="blue" style="background-color: #3b82f6;">
+                                                <span style="color: white; font-weight: bold;">藍</span>
+                                            </div>
+                                            <div class="color-zone" data-color="green" style="background-color: #22c55e;">
+                                                <span style="color: white; font-weight: bold;">綠</span>
+                                            </div>
+                                        </div>
+
+                                        <video id="gesture-video" autoplay muted playsinline style="transform: scaleX(-1);"></video>
+                                        <canvas id="gesture-overlay" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
+                                        <!-- 疊加繪畫畫布 -->
+                                        <div class="gesture-canvas-container gesture-overlay-mode">
+                                            <canvas id="gesture-canvas"></canvas>
+                                            <div class="gesture-canvas-placeholder" id="gesture-canvas-placeholder">
+                                                <div class="canvas-message">畫布區域<br><small>你的繪畫將顯示在這裡</small></div>
+                                            </div>
+                                        </div>
+                                        <div class="gesture-hints" id="gesture-hints">準備中...</div>
+                                    </div>
+                                </div>
+
+                                <!-- 最終圖片顯示區域 -->
+                                <div class="gesture-final-image-section" id="gesture-final-image-section" style="display: none;">
+                                    <div class="gesture-final-image-container">
+                                        <h4>🎨 完成的作品</h4>
+                                        <img id="gesture-final-image" alt="完成的繪畫作品" style="max-width: 100%; border-radius: 8px;">
+                                        <div class="final-image-actions">
+                                            <button type="button" class="btn secondary" id="save-final-image">儲存圖片</button>
+                                            <button type="button" class="btn ghost" id="new-drawing">重新繪畫</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="drawing-recognition">
-                            <h4>🤖 AI 識別結果</h4>
-                            <div class="recognition-display" id="drawing-recognition-result">
-                                <div class="recognition-message" id="recognition-message">開始繪畫讓 AI 來猜猜看！</div>
-                                <div class="recognition-confidence" id="recognition-confidence"></div>
-                                <div class="recognition-suggestions" id="recognition-suggestions"></div>
-                            </div>
+                        <div class="gesture-drawing-results hidden" id="gesture-drawing-results">
+                            <h3>🎨 繪畫會話結果</h3>
+                            <div id="gesture-final-result"></div>
                         </div>
                     </div>
 
-                    <div class="drawing-results hidden" id="drawing-results">
-                        <h3>🎨 繪畫會話結果</h3>
-                        <div id="drawing-final-result"></div>
-                    </div>
+
                 </div>
             </article>
         </section>

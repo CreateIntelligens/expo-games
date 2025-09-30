@@ -184,6 +184,11 @@ export class TabSwitcher {
         this.tabContents?.forEach(content => {
             content.classList.toggle('active', content.id === `${tabId}-tab`);
         });
+
+        // 發送自定義事件通知標籤切換
+        document.dispatchEvent(new CustomEvent('tabSwitched', {
+            detail: { tabId: tabId }
+        }));
     }
 }
 

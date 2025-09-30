@@ -256,7 +256,7 @@ class TestEmotionWebSocket:
             }
 
             with TestClient(app) as client:
-                with client.websocket_connect("/ws/emotion/stream") as websocket:
+                with client.websocket_connect("/ws/emotion") as websocket:
                     # 發送測試幀
                     test_message = {
                         "type": "frame",
@@ -279,7 +279,7 @@ class TestEmotionWebSocket:
     async def test_websocket_emotion_stream_ping_pong(self):
         """測試WebSocket心跳功能"""
         with TestClient(app) as client:
-            with client.websocket_connect("/ws/emotion/stream") as websocket:
+            with client.websocket_connect("/ws/emotion") as websocket:
                 # 發送ping消息
                 websocket.send_json({"type": "ping"})
 
@@ -291,7 +291,7 @@ class TestEmotionWebSocket:
     async def test_websocket_emotion_stream_invalid_message_type(self):
         """測試WebSocket無效消息類型"""
         with TestClient(app) as client:
-            with client.websocket_connect("/ws/emotion/stream") as websocket:
+            with client.websocket_connect("/ws/emotion") as websocket:
                 # 發送無效消息類型
                 websocket.send_json({"type": "invalid_type"})
 
@@ -307,7 +307,7 @@ class TestEmotionWebSocket:
             mock_analyze.side_effect = Exception("Analysis failed")
 
             with TestClient(app) as client:
-                with client.websocket_connect("/ws/emotion/stream") as websocket:
+                with client.websocket_connect("/ws/emotion") as websocket:
                     # 發送測試幀
                     test_message = {
                         "type": "frame",

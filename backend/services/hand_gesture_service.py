@@ -4,23 +4,25 @@
 # =============================================================================
 
 import logging
-import os
 import threading
 import time
 from enum import Enum
+from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 
-# MediaPipe 依賴初始化
-os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
+from ..utils.gpu_runtime import configure_gpu_runtime
+
+_GPU_STATUS = configure_gpu_runtime()
+
 try:
     import mediapipe as mp
     _MEDIAPIPE_AVAILABLE = True
     _MEDIAPIPE_ERROR: Optional[str] = None
 except Exception as exc:
-    mp = None
+    mp = SimpleNamespace(solutions=SimpleNamespace(hands=None))
     _MEDIAPIPE_AVAILABLE = False
     _MEDIAPIPE_ERROR = str(exc)
 
@@ -29,6 +31,16 @@ from ..utils.datetime_utils import _now_ts
 
 
 logger = logging.getLogger(__name__)
+
+if _GPU_STATUS.warnings:
+    for warning in _GPU_STATUS.warnings:
+        logger.warning("GPU setup warning: %s", warning)
+else:
+    logger.info(
+        "HandGestureService GPU ready | TensorFlow devices: %s | MediaPipe GPU enabled: %s",
+        _GPU_STATUS.tensorflow_devices,
+        _GPU_STATUS.mediapipe_gpu_enabled,
+    )
 
 
 class HandGestureType(Enum):
@@ -314,6 +326,9 @@ class HandGestureService:
         gesture_stable_count = 0
         last_stable_gesture = HandGestureType.UNKNOWN
 
+        if self.detection_start_time is None:
+            self.detection_start_time = time.time()
+
         try:
             while self.is_detecting and self.camera and self.camera.isOpened():
                 # 檢查時間限制
@@ -326,8 +341,8 @@ class HandGestureService:
 
                 frame_count += 1
 
-                # 每2幀檢測一次
-                if frame_count % 2 == 0:
+                # 每2幀檢測一次，但首幀也執行確保快速反應
+                if frame_count == 1 or frame_count % 2 == 0:
                     # 檢測手勢
                     gesture, confidence = self.gesture_detector.detect_gesture(frame)
 

@@ -1,8 +1,19 @@
 # =============================================================================
-# action_detection_service.py - 動作偵測服務
-# 互動式動作挑戰系統，整合臉部特徵辨識與即時遊戲邏輯
+# backend/services/action_detection_service.py - 動作偵測服務
+#
+# 互動式動作挑戰系統，整合臉部特徵辨識與即時遊戲邏輯。
+# 提供基於MediaPipe FaceMesh的即時臉部動作檢測，包括微笑、轉頭、
+# 聳肩、挑眉、眨眼、點頭等動作識別。支援不同難度等級的挑戰模式。
+#
+# 主要功能：
+# - 即時臉部動作檢測和進度追蹤
+# - 多難度等級挑戰系統 (簡單/中等/困難)
+# - 基準特徵建立和相對動作計算
+# - 影片檔案動作分析
+# - WebSocket即時狀態廣播
 # =============================================================================
 
+import logging
 import threading
 import time
 from enum import Enum
@@ -11,6 +22,21 @@ from typing import Dict, List, Optional
 import cv2
 
 from .status_broadcaster import StatusBroadcaster
+from ..utils.gpu_runtime import configure_gpu_runtime
+
+_GPU_STATUS = configure_gpu_runtime()
+
+logger = logging.getLogger(__name__)
+
+if _GPU_STATUS.warnings:
+    for warning in _GPU_STATUS.warnings:
+        logger.warning("GPU setup warning: %s", warning)
+else:
+    logger.info(
+        "ActionDetectionService GPU ready | TensorFlow devices: %s | MediaPipe GPU enabled: %s",
+        _GPU_STATUS.tensorflow_devices,
+        _GPU_STATUS.mediapipe_gpu_enabled,
+    )
 
 
 class ActionType(Enum):
@@ -53,8 +79,6 @@ class ActionChallenge:
         self.progress = 0.0
         self.start_time: Optional[float] = None
         self.completion_time: Optional[float] = None
-
-
 class FacialFeatureExtractor:
     """臉部特徵提取器，使用 MediaPipe FaceMesh"""
 
@@ -68,7 +92,6 @@ class FacialFeatureExtractor:
         # 初始化 MediaPipe
         self.mediapipe_ready = True
         try:
-            os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
             import mediapipe as mp
             self.mp_face_mesh = mp.solutions.face_mesh
             self.face_mesh = self.mp_face_mesh.FaceMesh(

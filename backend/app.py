@@ -33,6 +33,7 @@ from .services.hand_gesture_service import HandGestureService
 from .services.rps_game_service import RPSGameService
 from .services.drawing_service import DrawingService
 from .services.status_broadcaster import StatusBroadcaster
+from .utils.gpu_runtime import get_gpu_status_dict
 
 
 # Project directory structure setup
@@ -110,7 +111,7 @@ async def render_emotion_page(request: Request) -> HTMLResponse:
         200
     """
     return templates.TemplateResponse(
-        "emotion_action.html",
+        "index.html",
         {
             "request": request,
             "title": APP_TITLE,
@@ -144,6 +145,13 @@ async def render_websocket_docs(request: Request) -> HTMLResponse:
             "title": f"{APP_TITLE} - WebSocket API 文檔",
         },
     )
+
+
+@app.get("/api/system/gpu")
+async def gpu_status() -> dict:
+    """Return TensorFlow / MediaPipe GPU availability details."""
+
+    return get_gpu_status_dict()
 
 
 
@@ -834,6 +842,247 @@ async def websocket_drawing(websocket: WebSocket) -> None:
     finally:
         await status_broadcaster.unregister(queue)
 
+@app.websocket("/ws/drawing/gesture")
+async def websocket_drawing_gesture(websocket: WebSocket) -> None:
+    """
+    WebSocket endpoint for real-time gesture-based drawing.
+
+    Handles interactive gesture drawing where users can draw on a virtual canvas
+    using hand gestures detected from camera frames. Processes camera frames in
+    real-time to detect finger positions and translate them into drawing actions.
+
+    Supported message types:
+    - Client → Server:
+        - {"type": "open", "client_id": "unique_id"} - Open WebSocket connection
+        - {"type": "start_gesture_drawing", "mode": "gesture_control", "color": "blue", "canvas_size": [720, 1280]}
+        - {"type": "camera_frame", "image": "base64_data", "timestamp": 123.45}
+        - {"type": "stop_drawing"} - Stop drawing session
+        - {"type": "close"} - Close WebSocket connection
+
+    - Server → Client:
+        - {"type": "opened", "session_id": "ws_gesture_12345", "status": "ready"}
+        - {"type": "connection_confirmed", "client_id": "unique_id", "status": "active"}
+        - {"type": "drawing_started", "session_id": "gesture_12345", "canvas_size": [720, 1280]}
+        - {"type": "gesture_status", "current_gesture": "drawing", "fingers_up": [false, true, false, false, false]}
+        - {"type": "canvas_update", "canvas_base64": "data:image/png;base64,...", "stroke_count": 15}
+        - {"type": "recognition_result", "recognized_shape": "circle", "confidence": 0.87}
+        - {"type": "drawing_stopped", "session_id": "gesture_12345", "final_recognition": {...}}
+        - {"type": "closed", "reason": "client_request"}
+        - {"type": "error", "message": "MediaPipe initialization failed"}
+
+    Args:
+        websocket (WebSocket): The WebSocket connection instance for gesture drawing.
+
+    Note:
+        This endpoint processes camera frames and performs gesture recognition
+        for interactive drawing. Requires MediaPipe to be properly initialized.
+    """
+    await websocket.accept()
+
+    # WebSocket session state
+    ws_session_id = f"ws_gesture_{int(asyncio.get_event_loop().time() * 1000)}"
+    gesture_session_active = False
+    session_id = None
+    drawing_mode = "gesture_control"
+    client_id = None
+
+    try:
+        # Send initial connection confirmation
+        await websocket.send_json({
+            "type": "opened",
+            "session_id": ws_session_id,
+            "status": "ready",
+            "message": "WebSocket connection established for gesture drawing"
+        })
+
+        while True:
+            # Receive client message
+            data = await websocket.receive_json()
+            message_type = data.get("type", "")
+
+            if message_type == "open":
+                # Handle explicit WebSocket open request
+                client_id = data.get("client_id", f"client_{int(asyncio.get_event_loop().time() * 1000)}")
+                await websocket.send_json({
+                    "type": "connection_confirmed",
+                    "session_id": ws_session_id,
+                    "client_id": client_id,
+                    "status": "active"
+                })
+
+            elif message_type == "start_gesture_drawing":
+                # Start gesture drawing session
+                mode = data.get("mode", "gesture_control")
+                color = data.get("color", "black")
+                canvas_size = data.get("canvas_size", [640, 480])
+
+                # If there's already an active session for this WebSocket, stop it first
+                if gesture_session_active:
+                    drawing_service.stop_drawing_session()
+                    gesture_session_active = False
+
+                # Start drawing session (WebSocket mode - no camera needed)
+                result = drawing_service.start_drawing_session(
+                    mode=mode,
+                    color=color,
+                    auto_recognize=True,
+                    websocket_mode=True
+                )
+
+                if result.get("status") == "error":
+                    # If session already exists, try to stop it and restart
+                    if "已在進行中" in result.get("message", ""):
+                        drawing_service.stop_drawing_session()
+                        # Try again after stopping
+                        result = drawing_service.start_drawing_session(
+                            mode=mode,
+                            color=color,
+                            auto_recognize=True,
+                            websocket_mode=True
+                        )
+
+                if result.get("status") == "error":
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": result.get("message", "Failed to start gesture drawing"),
+                        "timestamp": data.get("timestamp", 0)
+                    })
+                else:
+                    gesture_session_active = True
+                    drawing_mode = mode
+                    session_id = f"gesture_{int(data.get('timestamp', 0) * 1000)}"
+
+                    await websocket.send_json({
+                        "type": "drawing_started",
+                        "session_id": session_id,
+                        "canvas_size": canvas_size,
+                        "timestamp": data.get("timestamp", 0)
+                    })
+
+            elif message_type == "camera_frame" and gesture_session_active:
+                # Process camera frame for gesture drawing
+                image_data = data.get("image", "")
+                timestamp = data.get("timestamp", 0)
+
+                try:
+                    # Decode base64 image
+                    if image_data.startswith("data:image/"):
+                        image_data = image_data.split(",")[1]
+
+                    image_bytes = base64.b64decode(image_data)
+
+                    # Process frame through drawing service
+                    result = drawing_service.process_frame_for_gesture_drawing(
+                        frame_data=image_bytes,
+                        mode=drawing_mode
+                    )
+
+                    # Send the processing result back to client
+                    await websocket.send_json(result)
+
+                except Exception as e:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Frame processing error: {str(e)}",
+                        "timestamp": timestamp
+                    })
+
+            elif message_type == "change_color" and gesture_session_active:
+                # Handle color change during drawing
+                new_color = data.get("color", "black")
+                timestamp = data.get("timestamp", 0)
+
+                try:
+                    # Validate color
+                    valid_colors = ["black", "red", "green", "blue", "yellow", "purple", "cyan", "white"]
+                    if new_color not in valid_colors:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"無效的顏色: {new_color}，支援的顏色: {', '.join(valid_colors)}",
+                            "timestamp": timestamp
+                        })
+                    else:
+                        # Change drawing color
+                        drawing_service.change_drawing_color(new_color)
+                        await websocket.send_json({
+                            "type": "color_changed",
+                            "color": new_color,
+                            "message": f"繪畫顏色已更改為 {new_color}",
+                            "timestamp": timestamp
+                        })
+
+                except Exception as e:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"顏色變更錯誤: {str(e)}",
+                        "timestamp": timestamp
+                    })
+
+            elif message_type == "stop_drawing":
+                # Stop gesture drawing session
+                if gesture_session_active:
+                    result = drawing_service.stop_drawing_session()
+                    gesture_session_active = False
+
+                    await websocket.send_json({
+                        "type": "drawing_stopped",
+                        "session_id": session_id,
+                        "final_recognition": result.get("final_recognition", {}),
+                        "timestamp": data.get("timestamp", 0)
+                    })
+                else:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "No active gesture drawing session",
+                        "timestamp": data.get("timestamp", 0)
+                    })
+
+            elif message_type == "close":
+                # Handle explicit WebSocket close request
+                if gesture_session_active:
+                    drawing_service.stop_drawing_session()
+                    gesture_session_active = False
+
+                await websocket.send_json({
+                    "type": "closed",
+                    "session_id": ws_session_id,
+                    "reason": "client_request",
+                    "timestamp": data.get("timestamp", 0)
+                })
+                break  # Exit the message loop to close the connection
+
+            elif message_type == "ping":
+                # Handle heartbeat ping - respond with pong
+                await websocket.send_json({
+                    "type": "pong",
+                    "timestamp": data.get("timestamp", 0)
+                })
+
+            elif message_type == "pong":
+                # Handle heartbeat pong - acknowledge silently
+                pass
+
+            else:
+                # Unknown message type
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unsupported message type: {message_type}",
+                    "timestamp": data.get("timestamp", 0)
+                })
+
+    except WebSocketDisconnect:
+        # Cleanup on disconnect
+        if gesture_session_active:
+            drawing_service.stop_drawing_session()
+    except Exception as e:
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"WebSocket error: {str(e)}"
+            })
+        except:
+            pass
+
 
 @app.websocket("/ws/action")
 async def websocket_action(websocket: WebSocket) -> None:
@@ -864,10 +1113,10 @@ async def websocket_action(websocket: WebSocket) -> None:
         await status_broadcaster.unregister(queue)
 
 
-@app.websocket("/ws/emotion/stream")
-async def websocket_emotion_stream(websocket: WebSocket) -> None:
+@app.websocket("/ws/emotion")
+async def websocket_emotion(websocket: WebSocket) -> None:
     """
-    WebSocket 影像串流情緒分析端點
+    WebSocket 即時情緒分析端點
 
     接收客戶端發送的影像幀，使用DeepFace進行即時情緒分析，
     並將分析結果即時返回給客戶端。
@@ -878,6 +1127,9 @@ async def websocket_emotion_stream(websocket: WebSocket) -> None:
 
     Args:
         websocket (WebSocket): WebSocket連接實例
+
+    Note:
+        WebSocket 本身就是串流協議，不需要額外的 /stream 後綴
     """
     await websocket.accept()
 
@@ -892,9 +1144,11 @@ async def websocket_emotion_stream(websocket: WebSocket) -> None:
                 continue
 
             if data.get("type") != "frame":
+                message_type = data.get("type", "未定義")
                 await websocket.send_json({
                     "type": "error",
-                    "message": "不支持的消息類型"
+                    "message": f"不支持的消息類型: {message_type}",
+                    "received_data": str(data)[:200]  # 只顯示前200字符以避免過長
                 })
                 continue
 

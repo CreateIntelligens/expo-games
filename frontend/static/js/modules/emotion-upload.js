@@ -1,23 +1,60 @@
 // =============================================================================
 // emotion-upload.js - 情緒上傳分析模組
+//
+// 負責處理檔案上傳和情緒分析的模組，支援圖片和影片檔案的拖放上傳、
+// 即時預覽、進度追蹤和串流分析結果顯示。
+//
+// 主要功能：
+// - 檔案驗證和拖放上傳
+// - 媒體檔案預覽
+// - 圖片靜態分析
+// - 影片串流分析
+// - 分析結果視覺化
 // =============================================================================
 
 import { validateFile } from '../common/utils.js';
 import { EMOTION_EMOJIS, STATUS_TYPES } from '../common/constants.js';
 import { ButtonToggler, ProgressBar, DropZoneHandler } from '../common/ui-helpers.js';
 
+/**
+ * 情緒上傳分析模組類別
+ * @class EmotionUploadModule
+ */
 export class EmotionUploadModule {
+    /**
+     * 建構函式
+     * @param {StatusManager} statusManager - 狀態管理器實例
+     */
     constructor(statusManager) {
+        /**
+         * 狀態管理器實例
+         * @type {StatusManager}
+         */
         this.statusManager = statusManager;
+
+        /**
+         * 當前選擇的檔案
+         * @type {File|null}
+         */
         this.selectedFile = null;
+
+        /**
+         * 檔案類型 ('image' 或 'video')
+         * @type {string|null}
+         */
         this.selectedFileKind = null;
+
+        /**
+         * 檔案預覽的Object URL
+         * @type {string|null}
+         */
         this.previewObjectUrl = null;
 
         // 防止重複分析的標記
         this.isAnalyzingImage = false;
         this.isAnalyzingVideo = false;
 
-        // DOM elements
+        // DOM 元素引用
         this.elements = {
             form: document.getElementById('emotion-upload-form'),
             dropZone: document.getElementById('emotion-drop-zone'),
@@ -29,18 +66,28 @@ export class EmotionUploadModule {
             analyzeBtn: document.getElementById('emotion-analyze-btn')
         };
 
-        // UI controllers
+        // UI 控制器
         this.buttonToggler = new ButtonToggler(this.elements.analyzeBtn);
         this.progressBar = new ProgressBar(this.elements.uploadProgress);
 
         this.init();
     }
 
+    /**
+     * 初始化模組
+     * @private
+     * @description 設置檔案上傳和表單提交的事件監聽器
+     */
     init() {
         this.setupFileUpload();
         this.setupFormSubmission();
     }
 
+    /**
+     * 設置檔案上傳功能
+     * @private
+     * @description 初始化拖放處理器和檔案輸入監聽器
+     */
     setupFileUpload() {
         // 設置拖放處理
         this.dropZoneHandler = new DropZoneHandler(
@@ -57,6 +104,11 @@ export class EmotionUploadModule {
         });
     }
 
+    /**
+     * 設置表單提交處理
+     * @private
+     * @description 攔截表單提交事件並觸發檔案分析
+     */
     setupFormSubmission() {
         this.elements.form?.addEventListener('submit', (event) => {
             event.preventDefault();
@@ -64,6 +116,12 @@ export class EmotionUploadModule {
         });
     }
 
+    /**
+     * 處理檔案選擇
+     * @private
+     * @param {File} file - 選擇的檔案物件
+     * @description 驗證檔案並設置為當前選擇的檔案，顯示預覽並啟用分析按鈕
+     */
     handleFileSelection(file) {
         const validation = validateFile(file);
         if (!validation.valid) {
@@ -88,6 +146,12 @@ export class EmotionUploadModule {
         this.statusManager.update(`已選擇檔案：${file.name}`, STATUS_TYPES.SUCCESS);
     }
 
+    /**
+     * 渲染檔案預覽
+     * @private
+     * @param {File} file - 要預覽的檔案
+     * @description 創建檔案的Object URL並替換拖放區域為預覽界面
+     */
     renderFilePreview(file) {
         if (!this.elements.dropZone) return;
 
@@ -102,6 +166,11 @@ export class EmotionUploadModule {
         this.replaceDropZoneWithPreview(file);
     }
 
+    /**
+     * 清除檔案選擇
+     * @private
+     * @description 重置所有檔案相關狀態，恢復原始拖放區域
+     */
     clearFileSelection() {
         this.selectedFile = null;
         this.selectedFileKind = null;
@@ -122,6 +191,11 @@ export class EmotionUploadModule {
         }
     }
 
+    /**
+     * 分析選擇的檔案
+     * @private
+     * @description 根據檔案類型選擇合適的分析方法（圖片或影片）
+     */
     analyzeSelectedFile() {
         if (!this.selectedFile) {
             this.statusManager.update('請先選擇要分析的檔案', STATUS_TYPES.WARNING);
@@ -136,6 +210,12 @@ export class EmotionUploadModule {
         }
     }
 
+    /**
+     * 分析圖片檔案
+     * @private
+     * @async
+     * @description 上傳圖片檔案到服務器進行情緒分析，顯示上傳進度和處理結果
+     */
     analyzeImageFile() {
         // 防止重複圖片分析
         if (this.isAnalyzingImage) {
@@ -202,6 +282,12 @@ export class EmotionUploadModule {
         xhr.send(formData);
     }
 
+    /**
+     * 分析影片串流
+     * @private
+     * @async
+     * @description 上傳影片檔案並處理服務器端串流分析結果，實時顯示分析進度和情緒變化
+     */
     analyzeVideoStream() {
         // 防止重複影片分析
         if (this.isAnalyzingVideo) {

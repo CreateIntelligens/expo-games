@@ -23,41 +23,7 @@ class TestEmotionService:
 
     def test_initialization(self, emotion_service, mock_broadcaster):
         assert emotion_service.status_broadcaster == mock_broadcaster
-        assert not emotion_service.is_detecting
-
-    def test_start_emotion_detection(self, emotion_service):
-        with patch('threading.Thread') as mock_thread:
-            result = emotion_service.start_emotion_detection(duration=30)
-            assert result["status"] == "started"
-            assert emotion_service.is_detecting
-            mock_thread.assert_called_once()
-
-    def test_start_emotion_detection_already_running(self, emotion_service):
-        emotion_service.is_detecting = True
-        result = emotion_service.start_emotion_detection()
-        assert result["status"] == "error"
-        assert "已在進行中" in result["message"]
-
-    def test_stop_emotion_detection(self, emotion_service):
-        emotion_service.is_detecting = True
-        mock_thread = MagicMock()
-        emotion_service.detection_thread = mock_thread
-        result = emotion_service.stop_emotion_detection()
-        assert result["status"] == "stopped"
-        assert not emotion_service.is_detecting
-        mock_thread.join.assert_called_once()
-
-    def test_get_detection_status_running(self, emotion_service):
-        emotion_service.is_detecting = True
-        status = emotion_service.get_detection_status()
-        assert status["status"] == "detecting"
-        assert status["is_detecting"]
-
-    def test_get_detection_status_not_running(self, emotion_service):
-        emotion_service.is_detecting = False
-        status = emotion_service.get_detection_status()
-        assert status["status"] == "idle"
-        assert not status["is_detecting"]
+        # 簡化後的服務只處理圖片分析，無攝影機檢測狀態
 
     @patch('cv2.imread')
     def test_analyze_image_success(self, mock_imread, emotion_service):
