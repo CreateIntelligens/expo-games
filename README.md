@@ -16,11 +16,14 @@
 - **即時回饋**：進度條顯示、動作完成提示
 - **遊戲化體驗**：計分系統、完成統計
 
-### 石頭剪刀布對戰 (RPS Duel Stage)
-- **手勢識別**：使用 MediaPipe Hands 精準識別石頭✊、剪刀✌️、布✋手勢
-- **AI 對戰**：三種難度的 AI 對手（簡單隨機、中等記憶、困難策略）
-- **即時對戰**：手勢捕捉倒數、同時出招、即時判定勝負
-- **戰績統計**：回合記錄、勝負統計、策略分析
+### 石頭剪刀布對戰 (RPS Duel Stage) ⭐ **NEW - MediaPipe 版本**
+- **MediaPipe 手勢識別**：使用 Google MediaPipe 預訓練模型，高精度手勢辨識
+- **圖片上傳模式**：玩家上傳手勢照片，系統精準辨識石頭✊、布✋、剪刀✌️
+- **電腦隨機對戰**：電腦隨機出拳，公平對決
+- **即時動畫效果**：3...2...1 倒數動畫、勝負特效（勝利脈衝、失敗震動、平手閃爍）
+- **WebSocket 即時更新**：遊戲狀態、回合進度、結果即時推播
+- **輕量高效**：完全獨立運作，不依賴外部服務
+- **戰績統計**：回合記錄、勝負統計、遊戲時長追蹤
 
 ### AI 繪畫識別 (Sketch Lab)
 - **虛擬繪畫**：用手指在空中繪畫，生成虛擬畫布
@@ -72,12 +75,15 @@ expo-games/
 │   ├── app.py                 # 主應用程式，定義所有 API 路由
 │   ├── config/
 │   │   └── settings.py        # 環境變數和配置管理
+│   ├── models/
+│   │   └── gesture_recognizer.task    # MediaPipe 手勢辨識模型
 │   ├── services/
 │   │   ├── emotion_service.py         # 情緒分析服務
 │   │   ├── action_detection_service.py # 動作檢測遊戲服務
 │   │   ├── drawing_service.py         # AI 繪畫服務 (WebSocket)
-│   │   ├── hand_gesture_service.py    # 手勢識別服務
-│   │   ├── rps_game_service.py        # 石頭剪刀布遊戲服務
+│   │   ├── hand_gesture_service.py    # 手勢識別服務 (MediaPipe)
+│   │   ├── mediapipe_rps_detector.py  # ⭐ MediaPipe 手勢辨識器
+│   │   ├── rps_game_service.py        # ⭐ 石頭剪刀布遊戲服務 (MediaPipe 版本)
 │   │   └── status_broadcaster.py      # WebSocket 狀態推播
 │   └── utils/
 │       ├── datetime_utils.py          # 時間工具函數
@@ -90,7 +96,8 @@ expo-games/
 │       ├── style.css          # 基礎樣式
 │       ├── css/
 │       │   ├── emotion_action.css     # 頁面專用樣式
-│       │   └── gesture-drawing.css    # 手勢繪畫樣式
+│       │   ├── gesture-drawing.css    # 手勢繪畫樣式
+│       │   └── rps-game.css           # ⭐ 猜拳遊戲樣式 + 動畫
 │       └── js/
 │           ├── emotion_action.js      # 互動邏輯和 WebSocket 通訊
 │           └── modules/
@@ -101,8 +108,12 @@ expo-games/
 │               ├── emotion-realtime.js    # 情緒即時分析入口
 │               ├── action-upload.js       # 動作檔案上傳模組
 │               ├── action-game.js         # 動作遊戲模組
-│               ├── rps-game.js            # 石頭剪刀布遊戲模組
+│               ├── rps-game.js            # ⭐ 石頭剪刀布遊戲模組 (MediaPipe + WebSocket)
 │               └── gesture-drawing.js     # 手勢繪畫入口
+│       └── assets/gestures/               # ⭐ 猜拳遊戲素材
+│           ├── rock.png                   # 石頭圖片
+│           ├── paper.png                  # 布圖片
+│           └── scissors.png               # 剪刀圖片
 ├── nginx/                     # Nginx 反向代理配置
 │   ├── nginx.conf            # 主配置文件
 │   ├── default.conf.template # 虛擬主機模板（支持環境變數）
@@ -112,7 +123,8 @@ expo-games/
 ├── docs/                     # 文檔
 │   ├── architecture-spec.md           # 全域架構規格
 │   ├── realtime-modules-architecture.md # 即時模組分層規劃
-│   └── websocket-protocol.md          # WebSocket 協議文檔
+│   ├── websocket-protocol.md          # WebSocket 協議文檔
+│   └── RPS_API.md                     # ⭐ 猜拳遊戲 API 文檔
 ├── docker-compose.yml        # 容器編排配置
 ├── Dockerfile               # 應用程式容器建置
 ├── requirements.txt         # Python 依賴
@@ -159,7 +171,7 @@ CORS_ALLOW_ORIGINS=*        # 允許的跨域來源
 
 ### 後端技術棧
 - **FastAPI**: 現代高性能 Web 框架
-- **MediaPipe**: Google 機器學習管道，用於臉部特徵提取
+- **MediaPipe**: Google 機器學習管道，用於臉部特徵提取和手勢辨識
 - **DeepFace**: 深度學習人臉識別和情緒分析
 - **OpenCV**: 計算機視覺庫，處理影像和影片
 - **TensorFlow**: 深度學習框架，支援 GPU 加速
@@ -207,13 +219,27 @@ POST /api/action/stop       # 停止遊戲
 GET  /api/action/status     # 獲取遊戲狀態
 ```
 
-### 石頭剪刀布 API
+### 石頭剪刀布 API ⭐ **MediaPipe 版本**
 
 ```http
 POST /api/rps/start         # 開始石頭剪刀布遊戲
+POST /api/rps/submit        # ⭐ 提交玩家手勢圖片 (MediaPipe 辨識)
 POST /api/rps/stop          # 停止遊戲
 GET  /api/rps/status        # 獲取遊戲狀態
+
+# 範例：提交手勢
+curl -X POST http://localhost:8896/api/rps/submit \
+  -F "file=@my_hand_gesture.jpg"
+
+# 回應範例
+{
+  "status": "success",
+  "gesture": "rock",
+  "confidence": 0.95
+}
 ```
+
+📋 **完整 API 文檔**: 請參考 [`docs/RPS_API.md`](docs/RPS_API.md)
 
 ### 手勢識別 API
 
@@ -343,12 +369,17 @@ docker compose down
 ### AI 技術實現參考
 - **手勢繪畫**: https://steam.oxxostudio.tw/category/python/ai/ai-mediapipe-finger-draw.html
 - **虛擬畫家**: https://github.com/MohamedAlaouiMhamdi/AI_virtual_Painter
-- **石頭剪刀布**: https://steam.oxxostudio.tw/category/python/ai/ai-rock-paper-scissors.html
+- **⭐ MediaPipe 猜拳**: https://github.com/google/mediapipe (已整合)
 - **手勢遊戲**: https://github.com/ChetanNair/Rock-Paper-Scissors
 - **微笑照片**: https://steam.oxxostudio.tw/category/python/ai/ai-smile-photo.html
 - **DeepFace**: https://github.com/serengil/deepface
 - **姿勢估計**: https://steam.oxxostudio.tw/category/python/ai/ai-mediapipe-pose.html
 - **MediaPipe**: https://github.com/google/mediapipe
+
+### 專案文檔
+- **⭐ 猜拳 API 文檔**: [`docs/RPS_API.md`](docs/RPS_API.md)
+- **WebSocket 協議**: [`docs/websocket-protocol.md`](docs/websocket-protocol.md)
+- **架構規格**: [`docs/architecture-spec.md`](docs/architecture-spec.md)
 
 ## 📄 授權
 

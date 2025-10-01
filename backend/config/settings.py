@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-APP_TITLE = os.getenv("APP_TITLE", "Emotion Insight Service")
-APP_PORT = int(os.getenv("APP_PORT", "8894"))
+APP_TITLE = os.getenv("APP_TITLE", "展場小遊戲")
+APP_PORT = int(os.getenv("APP_PORT", "8896"))
 
 MAX_UPLOAD_SIZE_BYTES = int(os.getenv("MAX_FILE_SIZE_MB", "50")) * 1024 * 1024
 

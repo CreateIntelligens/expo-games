@@ -1,0 +1,417 @@
+/* =============================================================================
+ * rps-game.css - 剪刀石頭布遊戲樣式和動畫
+ * ============================================================================= */
+
+/* 遊戲容器 */
+.rps-game-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 控制面板 */
+.rps-controls {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.rps-controls input[type="number"] {
+    width: 80px;
+    padding: 8px;
+    font-size: 16px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+}
+
+.rps-controls button {
+    padding: 10px 20px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.rps-controls button[data-rps-action="start"] {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.rps-controls button[data-rps-action="start"]:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.rps-controls button[data-rps-action="stop"] {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+.rps-controls button[data-rps-action="submit"] {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+}
+
+.rps-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* 分數板 */
+.rps-scoreboard {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    color: white;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.rps-score-item {
+    text-align: center;
+}
+
+.rps-score-label {
+    font-size: 18px;
+    margin-bottom: 10px;
+    opacity: 0.9;
+}
+
+.rps-score-value {
+    font-size: 48px;
+    font-weight: 700;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.rps-score-vs {
+    font-size: 24px;
+    font-weight: 700;
+    opacity: 0.8;
+}
+
+/* 回合顯示 */
+.rps-round-display {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+/* 舊的倒數動畫樣式已移除，使用新的並排佈局 */
+
+/* 遊戲區域 */
+.rps-game-area {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+    align-items: center;
+}
+
+.rps-player-area,
+.rps-computer-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.rps-player-label,
+.rps-computer-label {
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+}
+
+.rps-gesture-img {
+    width: 250px;
+    height: 250px;
+    object-fit: cover;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    display: none;
+    animation: gestureAppear 0.5s ease-out;
+}
+
+@keyframes gestureAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.8) rotateY(90deg);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) rotateY(0deg);
+    }
+}
+
+.rps-vs-divider {
+    font-size: 48px;
+    font-weight: 700;
+    color: #667eea;
+    text-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+}
+
+/* 上傳區域 */
+.rps-upload-area {
+    border: 3px dashed #ddd;
+    border-radius: 15px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.rps-upload-area:hover {
+    border-color: #667eea;
+    background: linear-gradient(135deg, #e0e7ff 0%, #c3cfe2 100%);
+}
+
+.rps-upload-area.drag-over {
+    border-color: #667eea;
+    background: linear-gradient(135deg, #d4e0ff 0%, #b8c9ff 100%);
+    transform: scale(1.02);
+}
+
+.rps-upload-icon {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: #667eea;
+}
+
+.rps-upload-text {
+    font-size: 18px;
+    color: #666;
+}
+
+.rps-file-input {
+    display: none;
+}
+
+/* 舊的全螢幕結果顯示樣式已移除，使用新的框內顯示 */
+
+/* 狀態顯示 */
+.rps-status-display {
+    text-align: center;
+    padding: 15px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #667eea;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e0e7ff 100%);
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .rps-game-area {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+    }
+
+    .rps-vs-divider {
+        transform: rotate(90deg);
+    }
+
+    .rps-gesture-img {
+        width: 200px;
+        height: 200px;
+    }
+
+    .rps-countdown {
+        font-size: 100px;
+    }
+
+    .rps-result-display {
+        font-size: 32px;
+        padding: 30px 40px;
+    }
+
+    .rps-score-value {
+        font-size: 36px;
+    }
+}
+
+/* 工具類別 */
+.hidden {
+    display: none !important;
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* RPS 遊戲佈局 */
+.rps-camera-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 20px;
+    align-items: start;
+}
+
+.rps-camera-container {
+    position: relative;
+    width: 100%;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.rps-camera-container video {
+    width: 100%;
+    height: auto;
+    display: block;
+    transform: scaleX(-1);
+}
+
+/* 右側固定顯示框 */
+.rps-display-frame {
+    width: 100%;
+    min-height: 400px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e0e7ff 100%);
+    border: 3px solid #667eea;
+    border-radius: 15px;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+}
+
+.rps-countdown-overlay {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 0;
+}
+
+.countdown-number {
+    font-size: 120px;
+    font-weight: 900;
+    color: #667eea;
+    text-shadow: 0 0 30px rgba(102, 126, 234, 0.5),
+                 0 5px 20px rgba(0, 0, 0, 0.2);
+    animation: countdownPulse 1s ease-out;
+}
+
+/* 對戰結果顯示區 */
+.rps-battle-display {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 20px;
+    align-items: center;
+}
+
+.battle-player,
+.battle-ai {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.battle-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #667eea;
+    margin-bottom: 5px;
+}
+
+.battle-gesture-image {
+    width: 200px;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border: 3px solid #667eea;
+}
+
+.battle-gesture-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: #333;
+}
+
+.battle-vs {
+    font-size: 36px;
+    font-weight: 900;
+    color: #667eea;
+    text-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+}
+
+/* 結果訊息 */
+.rps-result-message {
+    width: 100%;
+    padding: 30px;
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    border-radius: 10px;
+    text-align: center;
+}
+
+.rps-result-message.win {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.rps-result-message.lose {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.rps-result-message.draw {
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+}
+
+.result-text {
+    font-size: 36px;
+    font-weight: 900;
+    color: white;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes countdownPulse {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* 響應式調整 */
+@media (max-width: 1024px) {
+    .rps-camera-section {
+        grid-template-columns: 1fr;
+    }
+
+    .countdown-number {
+        font-size: 120px;
+    }
+}

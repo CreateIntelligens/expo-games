@@ -105,7 +105,9 @@ class StatusBroadcaster:
         """
         在同步上下文中廣播消息。
 
-        獲取事件循環並使用run_coroutine_threadsafe執行非同步廣播。
+        根據呼叫端是否已附著在事件迴圈上，選擇適當的排程策略：
+        - 若目前執行緒正運行於目標事件迴圈，直接建立 task。
+        - 否則透過 run_coroutine_threadsafe 排程協程。
 
         Args:
             message (Dict[str, Any]): 要廣播的消息字典
@@ -113,6 +115,16 @@ class StatusBroadcaster:
         loop = self._ensure_loop()
         if not loop:
             return
+
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is loop:
+            loop.create_task(self.broadcast(message))
+            return
+
         asyncio.run_coroutine_threadsafe(self.broadcast(message), loop)
 
     def broadcast_threadsafe(self, message: Dict[str, Any]) -> None:

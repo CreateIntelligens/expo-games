@@ -1,13 +1,19 @@
 /* =============================================================================
-websocket-docs.css - WebSocket API 文檔樣式
-============================================================================= */
+ * websocket-docs.css - WebSocket API 文檔樣式
+ * =============================================================================
+ * 定義 WebSocket API 文檔頁面的視覺樣式，包括端點展示、測試工具、
+ * 日誌顯示和互動式介面元素。
+ * =============================================================================
+ */
 
+/* 基礎重置 */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
+/* 全域樣式 */
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     line-height: 1.6;
@@ -15,12 +21,14 @@ body {
     background: #f8f9fa;
 }
 
+/* 主容器 */
 .container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
 }
 
+/* 頁面標題區域 */
 .header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -40,6 +48,7 @@ body {
     opacity: 0.9;
 }
 
+/* API 端點卡片 */
 .endpoint-card {
     background: white;
     border-radius: 8px;
@@ -48,6 +57,7 @@ body {
     overflow: hidden;
 }
 
+/* 端點標題區域 - 可點擊展開/收合 */
 .endpoint-header {
     background: #f8f9fa;
     padding: 20px;
@@ -56,12 +66,14 @@ body {
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid #e9ecef;
+    transition: background 0.2s ease;
 }
 
 .endpoint-header:hover {
     background: #e9ecef;
 }
 
+/* HTTP 方法標籤 (GET, POST, WebSocket 等) */
 .endpoint-method {
     background: #6c757d;
     color: white;
@@ -71,26 +83,31 @@ body {
     font-weight: bold;
 }
 
+/* 端點 URL 路徑 */
 .endpoint-url {
     font-family: 'Courier New', monospace;
     font-weight: bold;
     color: #495057;
 }
 
+/* 端點描述文字 */
 .endpoint-description {
     color: #6c757d;
     margin-top: 5px;
 }
 
+/* 端點詳細內容區域 - 預設隱藏 */
 .endpoint-content {
     display: none;
     padding: 20px;
 }
 
+/* 展開狀態 */
 .endpoint-content.active {
     display: block;
 }
 
+/* 內容區塊 */
 .section {
     margin-bottom: 30px;
 }
@@ -102,6 +119,7 @@ body {
     margin-bottom: 15px;
 }
 
+/* 訊息範例顯示 */
 .message-example {
     background: #f8f9fa;
     border: 1px solid #e9ecef;
@@ -113,12 +131,14 @@ body {
     overflow-x: auto;
 }
 
+/* 訊息類型標題 */
 .message-type {
     font-weight: bold;
     color: #495057;
     margin-bottom: 5px;
 }
 
+/* 程式碼區塊 - 深色背景 */
 .code-block {
     background: #2d3748;
     color: #e2e8f0;
@@ -130,6 +150,7 @@ body {
     overflow-x: auto;
 }
 
+/* 連線狀態指示器 */
 .status-indicator {
     display: inline-block;
     width: 12px;
@@ -138,25 +159,30 @@ body {
     margin-right: 8px;
 }
 
+/* 已連線狀態 - 綠色 */
 .status-connected {
     background: #48bb78;
 }
 
+/* 已斷線狀態 - 紅色 */
 .status-disconnected {
     background: #f56565;
 }
 
+/* 連線中狀態 - 橘色，帶脈衝動畫 */
 .status-connecting {
     background: #ed8936;
     animation: pulse 2s infinite;
 }
 
+/* 脈衝動畫效果 */
 @keyframes pulse {
     0% { opacity: 1; }
     50% { opacity: 0.5; }
     100% { opacity: 1; }
 }
 
+/* 測試工具區域 */
 .test-section {
     background: #f7fafc;
     border: 1px solid #e2e8f0;
@@ -165,6 +191,7 @@ body {
     margin-top: 20px;
 }
 
+/* 測試控制按鈕組 */
 .test-controls {
     display: flex;
     gap: 10px;
@@ -172,15 +199,17 @@ body {
     flex-wrap: wrap;
 }
 
+/* 按鈕基礎樣式 */
 .btn {
     padding: 8px 16px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.9em;
-    transition: background 0.2s;
+    transition: background 0.2s ease;
 }
 
+/* 主要按鈕 - 紫色 */
 .btn-primary {
     background: #667eea;
     color: white;
@@ -190,6 +219,7 @@ body {
     background: #5a67d8;
 }
 
+/* 成功按鈕 - 綠色 */
 .btn-success {
     background: #48bb78;
     color: white;
@@ -199,6 +229,7 @@ body {
     background: #38a169;
 }
 
+/* 危險按鈕 - 紅色 */
 .btn-danger {
     background: #f56565;
     color: white;
@@ -208,6 +239,7 @@ body {
     background: #e53e3e;
 }
 
+/* 日誌顯示區域 - 類似終端機 */
 .log-area {
     background: #1a202c;
     color: #e2e8f0;
@@ -220,6 +252,7 @@ body {
     white-space: pre-wrap;
 }
 
+/* 輸入欄位群組 */
 .input-group {
     margin-bottom: 10px;
 }
@@ -230,6 +263,7 @@ body {
     font-weight: bold;
 }
 
+/* 輸入框和下拉選單 */
 .input-group input, .input-group select {
     width: 100%;
     padding: 8px;
@@ -238,14 +272,17 @@ body {
     font-family: 'Courier New', monospace;
 }
 
+/* 切換箭頭圖示 */
 .toggle-arrow {
-    transition: transform 0.2s;
+    transition: transform 0.2s ease;
 }
 
+/* 展開狀態時旋轉箭頭 */
 .toggle-arrow.active {
     transform: rotate(90deg);
 }
 
+/* 資料表格 */
 .table {
     width: 100%;
     border-collapse: collapse;
@@ -263,6 +300,7 @@ body {
     font-weight: bold;
 }
 
+/* 徽章標籤 */
 .badge {
     display: inline-block;
     padding: 2px 6px;
@@ -271,21 +309,25 @@ body {
     font-weight: bold;
 }
 
+/* 成功徽章 - 綠色 */
 .badge-success {
     background: #c6f6d5;
     color: #22543d;
 }
 
+/* 錯誤徽章 - 紅色 */
 .badge-error {
     background: #fed7d7;
     color: #742a2a;
 }
 
+/* 資訊徽章 - 藍色 */
 .badge-info {
     background: #bee3f8;
     color: #2a4365;
 }
 
+/* 響應式設計 - 平板與手機 */
 @media (max-width: 768px) {
     .container {
         padding: 10px;
@@ -295,10 +337,12 @@ body {
         font-size: 2em;
     }
 
+    /* 測試控制按鈕在小螢幕上垂直排列 */
     .test-controls {
         flex-direction: column;
     }
 
+    /* 按鈕在小螢幕上佔滿寬度 */
     .btn {
         width: 100%;
     }

@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ title }}</title>
     <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="/static/css/emotion_action.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/gesture-drawing.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <link rel="stylesheet" href="/static/css/rps-game.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
 </head>
+
 <body class="expo-shell">
     <main class="layout">
         <section class="console">
@@ -48,7 +52,8 @@
                                     <div class="dropzone-icon">📤</div>
                                     <h3>拖放素材或點擊上傳</h3>
                                     <p>支援圖片與影片，單檔上限 {{ max_file_size_mb }} MB。</p>
-                                    <button type="button" class="btn secondary" onclick="document.getElementById('emotion-file-input').click()">挑選檔案</button>
+                                    <button type="button" class="btn secondary"
+                                        onclick="document.getElementById('emotion-file-input').click()">挑選檔案</button>
                                 </div>
                             </div>
 
@@ -66,7 +71,8 @@
                                         <span class="progress-text">準備中...</span>
                                     </div>
                                 </div>
-                                <button type="button" class="remove-file" onclick="clearEmotionFileSelection()" aria-label="移除檔案">✕</button>
+                                <button type="button" class="remove-file" onclick="clearEmotionFileSelection()"
+                                    aria-label="移除檔案">✕</button>
                             </div>
 
                             <div id="emotion-upload-progress" class="upload-progress" style="display: none;">
@@ -162,7 +168,8 @@
                                     <div class="dropzone-icon">📤</div>
                                     <h3>拖放影片或點擊上傳</h3>
                                     <p>支援 MP4, AVI, MOV 等格式，單檔上限 {{ max_file_size_mb }} MB。</p>
-                                    <button type="button" class="btn secondary" onclick="document.getElementById('action-file-input').click()">挑選影片</button>
+                                    <button type="button" class="btn secondary"
+                                        onclick="document.getElementById('action-file-input').click()">挑選影片</button>
                                 </div>
                             </div>
 
@@ -180,7 +187,8 @@
                                         <span class="progress-text">準備中...</span>
                                     </div>
                                 </div>
-                                <button type="button" class="remove-file" onclick="clearActionFileSelection()" aria-label="移除檔案">✕</button>
+                                <button type="button" class="remove-file" onclick="clearActionFileSelection()"
+                                    aria-label="移除檔案">✕</button>
                             </div>
 
                             <input id="action-file-input" name="file" type="file" accept="video/*" hidden>
@@ -204,53 +212,53 @@
 
                     <div class="tab-content active" id="action-game-tab">
                         <div class="action-controls">
-                        <div class="form-group">
-                            <label for="difficulty-select">遊戲難度：</label>
-                            <select id="difficulty-select" name="difficulty">
-                                <option value="easy">🟢 簡單 (3個動作)</option>
-                                <option value="medium">🟡 中等 (5個動作)</option>
-                                <option value="hard">🔴 困難 (7個動作)</option>
-                            </select>
-                        </div>
-                        <div class="control-buttons">
-                            <button type="button" class="btn primary" id="start-action-btn">開始遊戲</button>
-                            <button type="button" class="btn secondary" id="stop-action-btn" disabled>停止遊戲</button>
-                        </div>
-                    </div>
-
-                    <div class="game-status hidden" id="game-status">
-                        <div class="game-header">
-                            <h3>🎮 遊戲進行中</h3>
-                            <div class="game-stats">
-                                <span>難度: <span id="game-difficulty">簡單</span></span>
-                                <span class="divider"></span>
-                                <span>進度: <span id="game-progress">0/3</span></span>
-                                <span class="divider"></span>
-                                <span>分數: <span id="game-score">0</span></span>
+                            <div class="form-group">
+                                <label for="difficulty-select">遊戲難度：</label>
+                                <select id="difficulty-select" name="difficulty">
+                                    <option value="easy">🟢 簡單 (3個動作)</option>
+                                    <option value="medium">🟡 中等 (5個動作)</option>
+                                    <option value="hard">🔴 困難 (7個動作)</option>
+                                </select>
+                            </div>
+                            <div class="control-buttons">
+                                <button type="button" class="btn primary" id="start-action-btn">開始遊戲</button>
+                                <button type="button" class="btn secondary" id="stop-action-btn" disabled>停止遊戲</button>
                             </div>
                         </div>
-                        <div class="current-action">
-                            <div class="action-prompt">
-                                <div class="action-emoji" id="action-emoji">🎯</div>
-                                <div class="action-info">
-                                    <div class="action-name" id="action-name">準備開始...</div>
-                                    <div class="action-description" id="action-description">遊戲即將開始</div>
+
+                        <div class="game-status hidden" id="game-status">
+                            <div class="game-header">
+                                <h3>🎮 遊戲進行中</h3>
+                                <div class="game-stats">
+                                    <span>難度: <span id="game-difficulty">簡單</span></span>
+                                    <span class="divider"></span>
+                                    <span>進度: <span id="game-progress">0/3</span></span>
+                                    <span class="divider"></span>
+                                    <span>分數: <span id="game-score">0</span></span>
                                 </div>
                             </div>
-                            <div class="action-progress">
-                                <div class="progress-bar">
-                                    <div class="progress-fill" id="action-progress-fill"></div>
+                            <div class="current-action">
+                                <div class="action-prompt">
+                                    <div class="action-emoji" id="action-emoji">🎯</div>
+                                    <div class="action-info">
+                                        <div class="action-name" id="action-name">準備開始...</div>
+                                        <div class="action-description" id="action-description">遊戲即將開始</div>
+                                    </div>
                                 </div>
-                                <div class="progress-text" id="action-progress-text">0%</div>
+                                <div class="action-progress">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="action-progress-fill"></div>
+                                    </div>
+                                    <div class="progress-text" id="action-progress-text">0%</div>
+                                </div>
+                            </div>
+                            <div class="action-checklist">
+                                <h4>✅ 動作清單</h4>
+                                <div id="action-list"></div>
                             </div>
                         </div>
-                        <div class="action-checklist">
-                            <h4>✅ 動作清單</h4>
-                            <div id="action-list"></div>
-                        </div>
-                    </div>
 
-                    <div class="game-results hidden" id="game-results">
+                        <div class="game-results hidden" id="game-results">
                             <h3>🏆 遊戲結果</h3>
                             <div id="final-score-display"></div>
                         </div>
@@ -269,79 +277,48 @@
 
                 <div class="panel-body">
                     <div class="rps-controls">
-                        <div class="form-group">
-                            <label for="rps-mode-select">遊戲模式：</label>
-                            <select id="rps-mode-select" name="mode">
-                                <option value="vs_ai">🤖 對戰 AI</option>
-                                <option value="vs_player" disabled>👥 雙人對戰 (即將推出)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="rps-difficulty-select">AI 難度：</label>
-                            <select id="rps-difficulty-select" name="difficulty">
-                                <option value="easy">🟢 簡單 - 隨機出招</option>
-                                <option value="medium" selected>🟡 中等 - 有記憶力</option>
-                                <option value="hard">🔴 困難 - 高級策略</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="rps-target-score">目標分數：</label>
-                            <input type="number" id="rps-target-score" name="target_score" value="3" min="1" max="10">
-                        </div>
                         <div class="control-buttons">
                             <button type="button" class="btn primary" id="start-rps-btn">開始遊戲</button>
-                            <button type="button" class="btn secondary" id="stop-rps-btn" disabled>停止遊戲</button>
                         </div>
                     </div>
 
-                    <div class="rps-game-display hidden" id="rps-game-display">
-                        <div class="rps-game-header">
-                            <h3>🎮 遊戲進行中</h3>
-                            <div class="rps-game-stats">
-                                <span>模式: <span id="rps-current-mode">vs_ai</span></span>
-                                <span class="divider"></span>
-                                <span>難度: <span id="rps-current-difficulty">medium</span></span>
-                                <span class="divider"></span>
-                                <span>分數: 你 <span id="rps-player-score">0</span> - <span id="rps-opponent-score">0</span> AI</span>
-                            </div>
+                    <!-- 攝影機預覽區域（不在 hidden 區域內） -->
+                    <div class="rps-camera-section">
+                        <div class="rps-camera-container">
+                            <video id="rps-video" autoplay muted playsinline></video>
+                            <canvas id="rps-canvas" style="display: none;"></canvas>
                         </div>
 
-                        <div class="rps-battle-area">
-                            <div class="rps-players">
-                                <div class="rps-player">
-                                    <div class="player-name">你</div>
-                                    <div class="gesture-display" id="rps-player-gesture">❓</div>
-                                    <div class="gesture-status" id="rps-player-status">準備中...</div>
-                                </div>
-                                <div class="rps-vs">VS</div>
-                                <div class="rps-player">
-                                    <div class="player-name">AI</div>
-                                    <div class="gesture-display" id="rps-ai-gesture">❓</div>
-                                    <div class="gesture-status" id="rps-ai-status">準備中...</div>
-                                </div>
+                        <!-- 動畫顯示框（固定在右邊） -->
+                        <div class="rps-display-frame">
+                            <!-- 倒數數字 -->
+                            <div class="rps-countdown-overlay" id="rps-countdown-overlay" style="display: none;">
+                                <div class="countdown-number" id="countdown-number">3</div>
                             </div>
-                            <div class="rps-round-info">
-                                <div class="round-message" id="rps-round-message">準備開始...</div>
-                                <div class="countdown-display" id="rps-countdown" style="display: none;">3</div>
-                                <div class="rps-countdown-overlay" id="rps-countdown-overlay" style="display: none;">
-                                    <div class="countdown-image-container">
-                                        <img class="countdown-image" id="countdown-image" src="/static/assets/rps/rock.jpg" alt="倒數圖片">
-                                        <div class="countdown-number" id="countdown-number">3</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div class="rps-game-history">
-                            <h4>📊 對戰記錄</h4>
-                            <div id="rps-history-list"></div>
+                            <!-- 對戰結果顯示區 -->
+                            <div class="rps-battle-display" id="rps-battle-display" style="display: none;">
+                                <div class="battle-player">
+                                    <div class="battle-label">你的手勢</div>
+                                    <img class="battle-gesture-image" id="battle-player-image" alt="玩家手勢">
+                                    <div class="battle-gesture-name" id="battle-player-name">-</div>
+                                </div>
+                                <div class="battle-vs">VS</div>
+                                <div class="battle-ai">
+                                    <div class="battle-label">AI 的手勢</div>
+                                    <img class="battle-gesture-image" id="battle-ai-image" alt="AI手勢">
+                                    <div class="battle-gesture-name" id="battle-ai-name">-</div>
+                                </div>
+                            </div>
+
+                            <!-- 結果訊息 -->
+                            <div class="rps-result-message" id="rps-result-message" style="display: none;">
+                                <div class="result-text" id="result-text">-</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="rps-results hidden" id="rps-results">
-                        <h3>🏆 遊戲結果</h3>
-                        <div id="rps-final-result"></div>
-                    </div>
+
                 </div>
             </article>
 
@@ -355,78 +332,79 @@
                 </header>
 
                 <div class="panel-body">
-                        <!-- 手勢繪畫控制面板 -->
-                        <div class="gesture-drawing-controls">
-                            <!-- 控制按鈕區域 -->
-                            <div class="control-buttons">
-                                <button type="button" class="btn primary" id="start-gesture-drawing">開始手勢繪畫</button>
-                                <button type="button" class="btn secondary" id="stop-gesture-drawing" disabled>停止繪畫</button>
-                            </div>
-                        </div>
-
-                        <div class="gesture-drawing-display hidden" id="gesture-drawing-display">
-                            <div class="gesture-drawing-header">
-                                <h3>🎨 手勢繪畫</h3>
-                                <div class="gesture-drawing-stats">
-                                    <span>模式: <span id="gesture-current-mode">手勢控制</span></span>
-                                    <span class="divider"></span>
-                                    <span>顏色: <span id="gesture-current-color">黑色</span></span>
-                                    <span class="divider"></span>
-                                    <span>筆劃: <span id="gesture-stroke-count">0</span></span>
-                                </div>
-                            </div>
-
-                            <div class="gesture-drawing-layout">
-                                <div class="gesture-camera-section">
-                                    <div class="gesture-camera-container">
-                                        <!-- 顏色選擇工具列覆蓋層 -->
-                                        <div class="color-toolbar" id="gesture-color-toolbar">
-                                            <div class="color-zone active" data-color="black" style="background-color: #111827;">
-                                                <span style="color: white; font-weight: bold;">黑</span>
-                                            </div>
-                                            <div class="color-zone" data-color="red" style="background-color: #ef4444;">
-                                                <span style="color: white; font-weight: bold;">紅</span>
-                                            </div>
-                                            <div class="color-zone" data-color="blue" style="background-color: #3b82f6;">
-                                                <span style="color: white; font-weight: bold;">藍</span>
-                                            </div>
-                                            <div class="color-zone" data-color="green" style="background-color: #22c55e;">
-                                                <span style="color: white; font-weight: bold;">綠</span>
-                                            </div>
-                                        </div>
-
-                                        <video id="gesture-video" autoplay muted playsinline style="transform: scaleX(-1);"></video>
-                                        <canvas id="gesture-overlay" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
-                                        <!-- 疊加繪畫畫布 -->
-                                        <div class="gesture-canvas-container gesture-overlay-mode">
-                                            <canvas id="gesture-canvas"></canvas>
-                                            <div class="gesture-canvas-placeholder" id="gesture-canvas-placeholder">
-                                                <div class="canvas-message">畫布區域<br><small>你的繪畫將顯示在這裡</small></div>
-                                            </div>
-                                        </div>
-                                        <div class="gesture-hints" id="gesture-hints">準備中...</div>
-                                    </div>
-                                </div>
-
-                                <!-- 最終圖片顯示區域 -->
-                                <div class="gesture-final-image-section" id="gesture-final-image-section" style="display: none;">
-                                    <div class="gesture-final-image-container">
-                                        <h4>🎨 完成的作品</h4>
-                                        <img id="gesture-final-image" alt="完成的繪畫作品" style="max-width: 100%; border-radius: 8px;">
-                                        <div class="final-image-actions">
-                                            <button type="button" class="btn secondary" id="save-final-image">儲存圖片</button>
-                                            <button type="button" class="btn ghost" id="new-drawing">重新繪畫</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="gesture-drawing-results hidden" id="gesture-drawing-results">
-                            <h3>🎨 繪畫會話結果</h3>
-                            <div id="gesture-final-result"></div>
+                    <!-- 手勢繪畫控制面板 -->
+                    <div class="gesture-drawing-controls">
+                        <!-- 控制按鈕區域 -->
+                        <div class="control-buttons">
+                            <button type="button" class="btn primary" id="start-gesture-drawing">開始手勢繪畫</button>
+                            <button type="button" class="btn secondary" id="stop-gesture-drawing" disabled>停止繪畫</button>
                         </div>
                     </div>
+
+                    <div class="gesture-drawing-display hidden" id="gesture-drawing-display">
+                        <div class="gesture-drawing-header">
+                            <h3>🎨 手勢繪畫</h3>
+                            <div class="gesture-drawing-stats">
+                                <span>模式: <span id="gesture-current-mode">手勢控制</span></span>
+                                <span class="divider"></span>
+                                <span>顏色: <span id="gesture-current-color">黑色</span></span>
+                                <span class="divider"></span>
+                                <span>筆劃: <span id="gesture-stroke-count">0</span></span>
+                            </div>
+                        </div>
+
+                        <div class="gesture-drawing-layout">
+                            <div class="gesture-camera-section">
+                                <div class="gesture-camera-container">
+                                    <!-- 顏色選擇工具列覆蓋層 -->
+                                    <div class="color-toolbar" id="gesture-color-toolbar">
+                                        <div class="color-zone active" data-color="black"
+                                            style="background-color: #111827;">
+                                        </div>
+                                        <div class="color-zone" data-color="red" style="background-color: #ef4444;">
+                                        </div>
+                                        <div class="color-zone" data-color="blue" style="background-color: #3b82f6;">
+                                        </div>
+                                        <div class="color-zone" data-color="green" style="background-color: #22c55e;">
+                                        </div>
+                                    </div>
+
+                                    <video id="gesture-video" autoplay muted playsinline
+                                        style="transform: scaleX(-1);"></video>
+                                    <canvas id="gesture-overlay"
+                                        style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
+                                    <!-- 疊加繪畫畫布 -->
+                                    <div class="gesture-canvas-container gesture-overlay-mode">
+                                        <canvas id="gesture-canvas"></canvas>
+                                        <div class="gesture-canvas-placeholder" id="gesture-canvas-placeholder">
+                                            <div class="canvas-message">畫布區域<br><small>你的繪畫將顯示在這裡</small></div>
+                                        </div>
+                                    </div>
+                                    <div class="gesture-hints" id="gesture-hints">準備中...</div>
+                                </div>
+                            </div>
+
+                            <!-- 最終圖片顯示區域 -->
+                            <div class="gesture-final-image-section" id="gesture-final-image-section"
+                                style="display: none;">
+                                <div class="gesture-final-image-container">
+                                    <h4>🎨 完成的作品</h4>
+                                    <img id="gesture-final-image" alt="完成的繪畫作品"
+                                        style="max-width: 100%; border-radius: 8px;">
+                                    <div class="final-image-actions">
+                                        <button type="button" class="btn secondary" id="save-final-image">儲存圖片</button>
+                                        <button type="button" class="btn ghost" id="new-drawing">重新繪畫</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="gesture-drawing-results hidden" id="gesture-drawing-results">
+                        <h3>🎨 繪畫會話結果</h3>
+                        <div id="gesture-final-result"></div>
+                    </div>
+                </div>
 
 
                 </div>
@@ -439,9 +417,10 @@
     </footer>
 
     <script>
-        window.appConfig = { pageType: 'emotion_action' };
+        window.appConfig = { pageType: 'main' };
     </script>
     <!-- 使用模組化 JavaScript -->
-    <script type="module" src="/static/js/emotion_action.js"></script>
+    <script type="module" src="/static/js/main.js"></script>
 </body>
+
 </html>

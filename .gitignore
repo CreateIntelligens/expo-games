@@ -1,6 +1,7 @@
 # by CSL
 docs/
-
+.claude/
+.gemini/
 
 # Python
 a.streamlit/

@@ -5,16 +5,20 @@ python-multipart
 numpy<1.26
 pandas>=2.0.0,<2.2
 opencv-python-headless
-mediapipe
 pillow
 python-dotenv
 pytest
 httpx
 
 # DeepFace + GPU 支援
-tensorflow==2.13.0
-keras==2.13.1
+# 1. 移除 tensorflow 和 keras，因為基礎映像檔已經提供了
+#    tensorflow==2.13.0
+#    keras==2.13.1
 deepface==0.0.85
 requests>=2.27.1
 gdown>=3.10.1
 tqdm>=4.30.0
+
+# 2. 固定 mediapipe 版本以確保建置穩定性
+#    使用 0.10.0 以上版本以支援 Delegate.GPU
+mediapipe==0.10.11

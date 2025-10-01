@@ -260,7 +260,9 @@ export class CameraService extends EventTarget {
     /**
      * 捕獲影像幀
      */
-    captureFrame(format = 'jpeg', quality = STREAM_CONFIG.JPEG_QUALITY) {
+    captureFrame(format = 'jpeg', quality = STREAM_CONFIG.JPEG_QUALITY, options = {}) {
+        const { mirror = false } = options;
+
         if (!this.videoElement) {
             console.warn('⚠️ 無法捕獲幀：尚未綁定 video 元素');
             return null;
@@ -274,14 +276,27 @@ export class CameraService extends EventTarget {
             return null;
         }
 
+        const [width, height] = this.videoSize;
+
         try {
+            this.captureContext.save();
+            this.captureContext.setTransform(1, 0, 0, 1, 0, 0);
+            this.captureContext.clearRect(0, 0, width, height);
+
+            if (mirror) {
+                this.captureContext.translate(width, 0);
+                this.captureContext.scale(-1, 1);
+            }
+
             this.captureContext.drawImage(
                 this.videoElement,
                 0,
                 0,
-                this.videoSize[0],
-                this.videoSize[1]
+                width,
+                height
             );
+
+            this.captureContext.restore();
 
             const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
             const imageData = this.captureCanvas.toDataURL(mimeType, quality);

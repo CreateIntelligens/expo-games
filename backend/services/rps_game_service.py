@@ -1,6 +1,6 @@
 # =============================================================================
-# rps_game_service.py - 石頭剪刀布遊戲服務
-# 結合手勢識別的對戰遊戲系統，支援單人 vs AI 和多人對戰模式
+# rps_game_service.py - 猜拳遊戲服務（使用 MediaPipe 辨識）
+# 獨立的遊戲邏輯，支援 WebSocket 即時更新
 # =============================================================================
 
 import logging
@@ -8,255 +8,148 @@ import random
 import threading
 import time
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from .hand_gesture_service import HandGestureService, HandGestureType
+from .mediapipe_rps_detector import MediaPipeRPSDetector, RPSGesture
 from .status_broadcaster import StatusBroadcaster
 from ..utils.datetime_utils import _now_ts
-
 
 logger = logging.getLogger(__name__)
 
 
-class RPSGameMode(Enum):
-    """遊戲模式"""
-    VS_AI = "vs_ai"          # 單人對戰 AI
-    VS_PLAYER = "vs_player"  # 雙人對戰
-    TOURNAMENT = "tournament"  # 錦標賽模式
+class GameState(Enum):
+    """遊戲狀態"""
+    IDLE = "idle"              # 閒置
+    COUNTDOWN = "countdown"    # 倒數中 (3...2...1)
+    WAITING_PLAYER = "waiting_player"  # 等待玩家出拳
+    JUDGING = "judging"        # 判定中
+    RESULT = "result"          # 顯示結果
+    FINISHED = "finished"      # 遊戲結束
 
 
-class RPSGameDifficulty(Enum):
-    """AI 難度等級"""
-    EASY = "easy"      # 完全隨機
-    MEDIUM = "medium"  # 有記憶的策略
-    HARD = "hard"      # 高級策略 AI
-
-
-class RPSRoundResult(Enum):
+class RoundResult(Enum):
     """回合結果"""
     WIN = "win"
     LOSE = "lose"
     DRAW = "draw"
 
 
-class RPSGameState(Enum):
-    """遊戲狀態"""
-    IDLE = "idle"
-    WAITING_FOR_PLAYERS = "waiting"
-    ROUND_COUNTDOWN = "countdown"
-    ROUND_GESTURE_CAPTURE = "capture"
-    ROUND_RESULT = "result"
-    GAME_FINISHED = "finished"
-
-
-class RPSPlayer:
-    """玩家資料結構"""
-    def __init__(self, player_id: str, name: str, is_ai: bool = False):
-        self.player_id = player_id
-        self.name = name
-        self.is_ai = is_ai
-        self.score = 0
-        self.current_gesture: Optional[HandGestureType] = None
-        self.gesture_ready = False
-        self.wins = 0
-        self.losses = 0
-        self.draws = 0
-
-    def reset_round(self):
-        """重置回合狀態"""
-        self.current_gesture = None
-        self.gesture_ready = False
-
-    def add_result(self, result: RPSRoundResult):
-        """添加結果統計"""
-        if result == RPSRoundResult.WIN:
-            self.wins += 1
-            self.score += 1
-        elif result == RPSRoundResult.LOSE:
-            self.losses += 1
-        elif result == RPSRoundResult.DRAW:
-            self.draws += 1
-
-
-class RPSAIPlayer:
-    """AI 玩家策略"""
-    def __init__(self, difficulty: RPSGameDifficulty):
-        self.difficulty = difficulty
-        self.player_history = []  # 記錄對手出招歷史
-        self.my_history = []     # 記錄自己出招歷史
-
-    def get_ai_gesture(self, round_number: int) -> HandGestureType:
-        """根據難度和歷史獲取 AI 出招"""
-        if self.difficulty == RPSGameDifficulty.EASY:
-            return self._random_gesture()
-        elif self.difficulty == RPSGameDifficulty.MEDIUM:
-            return self._strategy_gesture()
-        else:  # HARD
-            return self._advanced_strategy_gesture(round_number)
-
-    def add_round_history(self, player_gesture: HandGestureType, ai_gesture: HandGestureType):
-        """記錄回合歷史"""
-        if player_gesture != HandGestureType.UNKNOWN:
-            self.player_history.append(player_gesture)
-        self.my_history.append(ai_gesture)
-
-    def _random_gesture(self) -> HandGestureType:
-        """完全隨機策略"""
-        return random.choice([HandGestureType.ROCK, HandGestureType.PAPER, HandGestureType.SCISSORS])
-
-    def _strategy_gesture(self) -> HandGestureType:
-        """中等策略：基於對手最近的出招傾向"""
-        if len(self.player_history) < 2:
-            return self._random_gesture()
-
-        # 分析對手最近3次出招
-        recent_moves = self.player_history[-3:]
-        move_counts = {
-            HandGestureType.ROCK: recent_moves.count(HandGestureType.ROCK),
-            HandGestureType.PAPER: recent_moves.count(HandGestureType.PAPER),
-            HandGestureType.SCISSORS: recent_moves.count(HandGestureType.SCISSORS)
-        }
-
-        # 預測對手可能出什麼，然後出克制它的
-        predicted_opponent = max(move_counts.keys(), key=lambda k: move_counts[k])
-        return self._counter_gesture(predicted_opponent)
-
-    def _advanced_strategy_gesture(self, round_number: int) -> HandGestureType:
-        """高級策略：混合多種策略"""
-        if len(self.player_history) < 5:
-            return self._strategy_gesture()
-
-        # 70% 時間使用策略，30% 時間隨機（避免被預測）
-        if random.random() < 0.7:
-            # 分析對手的週期性模式
-            if len(self.player_history) >= 6:
-                # 檢查是否有 2-3 個手勢的重複模式
-                for pattern_len in [2, 3]:
-                    if len(self.player_history) >= pattern_len * 2:
-                        recent_pattern = self.player_history[-pattern_len:]
-                        prev_pattern = self.player_history[-(pattern_len*2):-pattern_len]
-
-                        if recent_pattern == prev_pattern:
-                            # 檢測到模式，預測下一個動作
-                            next_in_pattern = self.player_history[-pattern_len + (round_number % pattern_len)]
-                            return self._counter_gesture(next_in_pattern)
-
-            # 如果沒有檢測到模式，使用頻率分析
-            return self._strategy_gesture()
-        else:
-            return self._random_gesture()
-
-    def _counter_gesture(self, gesture: HandGestureType) -> HandGestureType:
-        """返回克制指定手勢的手勢"""
-        counter_map = {
-            HandGestureType.ROCK: HandGestureType.PAPER,
-            HandGestureType.PAPER: HandGestureType.SCISSORS,
-            HandGestureType.SCISSORS: HandGestureType.ROCK
-        }
-        return counter_map.get(gesture, HandGestureType.ROCK)
-
-
 class RPSGameService:
-    """石頭剪刀布遊戲服務主類"""
+    """
+    猜拳遊戲服務（使用 MediaPipe）
 
-    def __init__(self, status_broadcaster: StatusBroadcaster, hand_gesture_service: HandGestureService):
+    特點：
+    - 使用 MediaPipe 高精度手勢辨識
+    - 支援 WebSocket 即時狀態更新
+    - 完全獨立，不依賴攝影機服務
+    - 支援圖片上傳辨識
+    """
+
+    def __init__(self, status_broadcaster: StatusBroadcaster):
         self.status_broadcaster = status_broadcaster
-        self.hand_gesture_service = hand_gesture_service
+        self.detector = MediaPipeRPSDetector()
+
+        if not self.detector.is_available():
+            logger.warning(
+                "MediaPipe 辨識器不可用，遊戲功能受限: %s",
+                self.detector.init_error
+            )
 
         # 遊戲狀態
-        self.game_state = RPSGameState.IDLE
-        self.game_mode = RPSGameMode.VS_AI
-        self.players: Dict[str, RPSPlayer] = {}
-        self.ai_player: Optional[RPSAIPlayer] = None
+        self.game_state = GameState.IDLE
         self.game_thread: Optional[threading.Thread] = None
+        self.stop_flag = threading.Event()
 
         # 遊戲設定
-        self.target_score = 3  # 目標獲勝分數
-        self.round_countdown_time = 3  # 回合倒數時間
-        self.gesture_capture_time = 2  # 手勢捕捉時間
-        self.result_display_time = 2   # 結果顯示時間
+        self.countdown_time = 3  # 倒數秒數
+        self.result_display_time = 3  # 結果顯示時間
+        self.target_score = 3  # 目標分數
+
+        # 玩家資料
+        self.player_score = 0
+        self.computer_score = 0
+        self.current_round = 0
+        self.round_history: List[Dict] = []
+
+        # 當前回合資料
+        self.player_gesture: Optional[RPSGesture] = None
+        self.computer_gesture: Optional[RPSGesture] = None
+        self.current_result: Optional[RoundResult] = None
 
         # 遊戲統計
         self.game_start_time: Optional[float] = None
-        self.current_round = 0
-        self.round_history = []
 
-    def start_game(self, mode: str = "vs_ai", difficulty: str = "medium", target_score: int = 3) -> Dict:
+    def start_game(self, target_score: int = 3) -> Dict:
         """開始遊戲"""
-        if self.game_state != RPSGameState.IDLE:
+        if self.game_state != GameState.IDLE:
             return {"status": "error", "message": "遊戲已在進行中"}
 
-        # 設定遊戲參數
-        try:
-            self.game_mode = RPSGameMode(mode)
-            self.target_score = target_score
-        except ValueError:
-            return {"status": "error", "message": f"無效的遊戲模式: {mode}"}
-
-        # 初始化玩家
-        self.players = {}
-        self.players["player1"] = RPSPlayer("player1", "玩家", False)
-
-        if self.game_mode == RPSGameMode.VS_AI:
-            try:
-                ai_difficulty = RPSGameDifficulty(difficulty)
-                self.players["ai"] = RPSPlayer("ai", f"AI ({difficulty.upper()})", True)
-                self.ai_player = RPSAIPlayer(ai_difficulty)
-            except ValueError:
-                return {"status": "error", "message": f"無效的難度等級: {difficulty}"}
+        if not self.detector.is_available():
+            return {
+                "status": "error",
+                "message": f"MediaPipe 辨識器不可用: {self.detector.init_error}"
+            }
 
         # 重置遊戲狀態
-        self.game_state = RPSGameState.WAITING_FOR_PLAYERS
+        self.target_score = target_score
+        self.player_score = 0
+        self.computer_score = 0
         self.current_round = 0
         self.round_history = []
         self.game_start_time = time.time()
+        self.stop_flag.clear()
 
-        # 開始遊戲線程
+        # 變更狀態
+        self.game_state = GameState.COUNTDOWN
+
+        # 開始遊戲循環
         self.game_thread = threading.Thread(target=self._game_loop, daemon=True)
         self.game_thread.start()
 
         # 廣播遊戲開始
-        self.status_broadcaster.broadcast_threadsafe({
-            "channel": "rps",
+        self._broadcast({
             "stage": "game_started",
-            "message": f"石頭剪刀布遊戲開始 - {mode.upper()} 模式",
+            "message": "猜拳遊戲開始！",
             "data": {
-                "mode": mode,
-                "difficulty": difficulty if self.game_mode == RPSGameMode.VS_AI else None,
                 "target_score": target_score,
-                "players": {pid: {"name": p.name, "is_ai": p.is_ai} for pid, p in self.players.items()}
+                "player_score": 0,
+                "computer_score": 0
             }
         })
 
         return {
             "status": "started",
-            "message": "石頭剪刀布遊戲已開始",
-            "mode": mode,
+            "message": "遊戲已開始",
             "target_score": target_score
         }
 
     def stop_game(self) -> Dict:
         """停止遊戲"""
-        if self.game_state == RPSGameState.IDLE:
+        if self.game_state == GameState.IDLE:
             return {"status": "idle", "message": "遊戲未在進行中"}
 
-        self.game_state = RPSGameState.IDLE
+        # 設定停止旗標
+        self.stop_flag.set()
+        self.game_state = GameState.IDLE
 
-        if self.game_thread:
+        # 等待遊戲線程結束
+        if self.game_thread and self.game_thread.is_alive():
             self.game_thread.join(timeout=2)
 
-        # 計算遊戲統計
+        # 計算統計資料
         total_time = time.time() - self.game_start_time if self.game_start_time else 0
 
         # 廣播遊戲停止
-        self.status_broadcaster.broadcast_threadsafe({
-            "channel": "rps",
+        self._broadcast({
             "stage": "game_stopped",
             "message": "遊戲已停止",
             "data": {
                 "total_time": total_time,
                 "rounds_played": self.current_round,
-                "final_scores": {pid: p.score for pid, p in self.players.items()}
+                "final_scores": {
+                    "player": self.player_score,
+                    "computer": self.computer_score
+                }
             }
         })
 
@@ -265,278 +158,292 @@ class RPSGameService:
             "message": "遊戲已停止",
             "summary": {
                 "total_time": total_time,
-                "rounds_played": self.current_round
+                "rounds_played": self.current_round,
+                "player_score": self.player_score,
+                "computer_score": self.computer_score
             }
         }
 
-    def get_game_status(self) -> Dict:
-        """獲取遊戲狀態"""
-        if self.game_state == RPSGameState.IDLE:
+    def submit_player_gesture(self, image_path: str) -> Dict:
+        """
+        提交玩家手勢圖片
+
+        Args:
+            image_path: 圖片檔案路徑
+
+        Returns:
+            辨識結果
+        """
+        if self.game_state != GameState.WAITING_PLAYER:
             return {
-                "status": "idle",
-                "message": "遊戲未在進行中",
-                "is_playing": False
+                "status": "error",
+                "message": f"當前不接受出拳（狀態: {self.game_state.value}）"
             }
 
+        # 使用 MediaPipe 辨識手勢
+        gesture, confidence = self.detector.detect(image_path)
+
+        if gesture == RPSGesture.UNKNOWN or confidence < 0.5:
+            return {
+                "status": "error",
+                "message": "無法辨識手勢，請重新拍攝",
+                "confidence": confidence
+            }
+
+        # 儲存玩家手勢
+        self.player_gesture = gesture
+
+        logger.info(
+            "玩家出拳: %s (信心度: %.3f)",
+            gesture.value,
+            confidence
+        )
+
+        return {
+            "status": "success",
+            "message": "手勢辨識成功",
+            "gesture": gesture.value,
+            "confidence": confidence
+        }
+
+    def get_game_status(self) -> Dict:
+        """取得遊戲狀態"""
         return {
             "status": self.game_state.value,
-            "message": f"遊戲進行中 - {self.game_state.value}",
-            "is_playing": True,
+            "is_playing": self.game_state != GameState.IDLE,
             "current_round": self.current_round,
             "target_score": self.target_score,
-            "players": {
-                pid: {
-                    "name": p.name,
-                    "score": p.score,
-                    "is_ai": p.is_ai,
-                    "current_gesture": p.current_gesture.value if p.current_gesture else None,
-                    "gesture_ready": p.gesture_ready
-                } for pid, p in self.players.items()
+            "scores": {
+                "player": self.player_score,
+                "computer": self.computer_score
             },
+            "current_gestures": {
+                "player": self.player_gesture.value if self.player_gesture else None,
+                "computer": self.computer_gesture.value if self.computer_gesture else None
+            },
+            "current_result": self.current_result.value if self.current_result else None,
             "game_duration": time.time() - self.game_start_time if self.game_start_time else 0
         }
 
     def _game_loop(self):
-        """遊戲主循環"""
+        """遊戲主循環（在背景執行）"""
         try:
-            while self.game_state != RPSGameState.IDLE:
-                if self._check_game_winner():
-                    self._finish_game()
-                    break
-
+            while not self.stop_flag.is_set():
                 # 開始新回合
-                self._start_new_round()
+                self._start_round()
 
-                # 等待手勢捕捉完成
-                if not self._wait_for_gestures():
+                # 倒數 3...2...1
+                if not self._countdown():
                     break
 
-                # 計算並顯示結果
-                self._process_round_result()
-
-                # 檢查是否應該結束遊戲
-                if self._check_game_winner():
-                    self._finish_game()
+                # 等待玩家出拳
+                if not self._wait_for_player():
                     break
+
+                # 電腦出拳
+                self._computer_play()
+
+                # 判定結果
+                self._judge_result()
+
+                # 顯示結果
+                self._show_result()
+
+                # 🎯 永遠只玩一回合，不管結果直接結束
+                logger.info("單次對決結束")
+                self._finish_game()
+                break
 
         except Exception as exc:
             logger.exception("遊戲循環錯誤: %s", exc)
-            self.status_broadcaster.broadcast_threadsafe({
-                "channel": "rps",
+            self._broadcast({
                 "stage": "error",
                 "message": f"遊戲錯誤: {str(exc)}"
             })
-            self.game_state = RPSGameState.IDLE
+        finally:
+            self.game_state = GameState.IDLE
 
-    def _start_new_round(self):
+    def _start_round(self):
         """開始新回合"""
         self.current_round += 1
-        self.game_state = RPSGameState.ROUND_COUNTDOWN
+        self.player_gesture = None
+        self.computer_gesture = None
+        self.current_result = None
 
-        # 重置玩家狀態
-        for player in self.players.values():
-            player.reset_round()
+        logger.info("開始第 %d 回合", self.current_round)
 
-        # 廣播回合開始
-        self.status_broadcaster.broadcast_threadsafe({
-            "channel": "rps",
-            "stage": "round_start",
-            "message": f"第 {self.current_round} 回合開始",
+        self._broadcast({
+            "stage": "round_started",
+            "message": f"第 {self.current_round} 回合",
             "data": {
                 "round": self.current_round,
-                "countdown": self.round_countdown_time
+                "scores": {
+                    "player": self.player_score,
+                    "computer": self.computer_score
+                }
             }
         })
 
-        # 倒數計時
-        for i in range(self.round_countdown_time, 0, -1):
-            if self.game_state == RPSGameState.IDLE:
-                return
+    def _countdown(self) -> bool:
+        """倒數 3...2...1"""
+        self.game_state = GameState.COUNTDOWN
 
-            self.status_broadcaster.broadcast_threadsafe({
-                "channel": "rps",
-                "stage": "countdown",
-                "message": f"倒數 {i}",
-                "data": {"countdown": i}
-            })
-            time.sleep(1)
-
-    def _wait_for_gestures(self) -> bool:
-        """等待手勢捕捉"""
-        self.game_state = RPSGameState.ROUND_GESTURE_CAPTURE
-
-        self.status_broadcaster.broadcast_threadsafe({
-            "channel": "rps",
-            "stage": "gesture_capture",
-            "message": "出招！",
-            "data": {"capture_time": self.gesture_capture_time}
-        })
-
-        # 捕捉玩家手勢
-        start_time = time.time()
-        player_gesture_captured = False
-
-        while time.time() - start_time < self.gesture_capture_time:
-            if self.game_state == RPSGameState.IDLE:
+        for i in range(self.countdown_time, 0, -1):
+            if self.stop_flag.is_set():
                 return False
 
-            # 獲取當前手勢
-            gesture_data = self.hand_gesture_service.get_current_gesture()
-            current_gesture = HandGestureType(gesture_data["gesture"]) if gesture_data["gesture"] != "unknown" else HandGestureType.UNKNOWN
-            confidence = gesture_data["confidence"]
+            self._broadcast({
+                "stage": "countdown",
+                "message": str(i),
+                "data": {"count": i}
+            })
 
-            # 檢查手勢是否有效且穩定
-            if current_gesture != HandGestureType.UNKNOWN and confidence > 0.7:
-                if not player_gesture_captured:
-                    self.players["player1"].current_gesture = current_gesture
-                    self.players["player1"].gesture_ready = True
-                    player_gesture_captured = True
-
-            time.sleep(0.1)
-
-        # AI 出招 (如果是 vs AI 模式)
-        if "ai" in self.players:
-            ai_gesture = self.ai_player.get_ai_gesture(self.current_round)
-            self.players["ai"].current_gesture = ai_gesture
-            self.players["ai"].gesture_ready = True
-
-        # 如果玩家沒有出招，給予隨機手勢
-        if not self.players["player1"].gesture_ready:
-            self.players["player1"].current_gesture = random.choice([
-                HandGestureType.ROCK, HandGestureType.PAPER, HandGestureType.SCISSORS
-            ])
-            self.players["player1"].gesture_ready = True
+            time.sleep(1)
 
         return True
 
-    def _process_round_result(self):
-        """處理回合結果"""
-        self.game_state = RPSGameState.ROUND_RESULT
+    def _wait_for_player(self) -> bool:
+        """等待玩家出拳"""
+        self.game_state = GameState.WAITING_PLAYER
 
-        player1 = self.players["player1"]
-        opponent = self.players["ai"] if "ai" in self.players else list(self.players.values())[1]
+        self._broadcast({
+            "stage": "waiting_player",
+            "message": "請上傳你的手勢！",
+            "data": {}
+        })
 
-        # 計算結果
-        result = self._determine_winner(player1.current_gesture, opponent.current_gesture)
+        # 等待玩家透過 API 提交手勢（最多等待 10 秒）
+        wait_time = 0
+        max_wait = 10
 
-        # 更新分數
-        if result == RPSRoundResult.WIN:
-            player1.add_result(RPSRoundResult.WIN)
-            opponent.add_result(RPSRoundResult.LOSE)
-        elif result == RPSRoundResult.LOSE:
-            player1.add_result(RPSRoundResult.LOSE)
-            opponent.add_result(RPSRoundResult.WIN)
-        else:
-            player1.add_result(RPSRoundResult.DRAW)
-            opponent.add_result(RPSRoundResult.DRAW)
+        while self.player_gesture is None and wait_time < max_wait:
+            if self.stop_flag.is_set():
+                return False
 
-        # 記錄歷史
-        round_data = {
-            "round": self.current_round,
-            "player1_gesture": player1.current_gesture.value,
-            "opponent_gesture": opponent.current_gesture.value,
-            "result": result.value,
-            "timestamp": _now_ts()
+            time.sleep(0.5)
+            wait_time += 0.5
+
+        # 如果超時，隨機給一個手勢
+        if self.player_gesture is None:
+            self.player_gesture = random.choice([
+                RPSGesture.ROCK,
+                RPSGesture.PAPER,
+                RPSGesture.SCISSORS
+            ])
+            logger.warning("玩家超時，隨機分配手勢: %s", self.player_gesture.value)
+
+        return True
+
+    def _computer_play(self):
+        """電腦出拳（隨機）"""
+        self.computer_gesture = random.choice([
+            RPSGesture.ROCK,
+            RPSGesture.PAPER,
+            RPSGesture.SCISSORS
+        ])
+
+        logger.info("電腦出拳: %s", self.computer_gesture.value)
+
+    def _judge_result(self):
+        """判定結果（簡化版：不計分）"""
+        self.game_state = GameState.JUDGING
+
+        result = self._determine_winner(self.player_gesture, self.computer_gesture)
+        self.current_result = result
+
+        # 🎯 單次對決模式：不更新分數，只記錄結果
+        logger.info(
+            "對決結果: %s | 玩家: %s vs 電腦: %s",
+            result.value,
+            self.player_gesture.value,
+            self.computer_gesture.value
+        )
+
+    def _show_result(self):
+        """顯示結果"""
+        self.game_state = GameState.RESULT
+
+        result_messages = {
+            RoundResult.WIN: "你贏了！🎉",
+            RoundResult.LOSE: "你輸了！😢",
+            RoundResult.DRAW: "平手！🤝"
         }
-        self.round_history.append(round_data)
 
-        # 更新 AI 歷史 (如果是 AI 模式)
-        if self.ai_player:
-            self.ai_player.add_round_history(player1.current_gesture, opponent.current_gesture)
-
-        # 廣播結果
-        self.status_broadcaster.broadcast_threadsafe({
-            "channel": "rps",
-            "stage": "round_result",
-            "message": self._get_result_message(result, player1.current_gesture, opponent.current_gesture),
+        self._broadcast({
+            "stage": "result",
+            "message": result_messages[self.current_result],
             "data": {
-                "round": self.current_round,
-                "result": result.value,
+                "result": self.current_result.value,
                 "gestures": {
-                    "player1": player1.current_gesture.value,
-                    "opponent": opponent.current_gesture.value
+                    "player": self.player_gesture.value,
+                    "computer": self.computer_gesture.value
                 },
+                # 🎯 保留分數欄位以相容前端，但永遠是 0-0 或對決結果
                 "scores": {
-                    "player1": player1.score,
-                    "opponent": opponent.score
-                },
-                "round_history": self.round_history[-3:]  # 最近3回合
+                    "player": 1 if self.current_result == RoundResult.WIN else 0,
+                    "computer": 1 if self.current_result == RoundResult.LOSE else 0
+                }
             }
         })
 
-        # 顯示結果
-        time.sleep(self.result_display_time)
+        # 🎯 不要 sleep，讓遊戲循環立即執行 break
+        # 前端會處理 3 秒顯示延遲
 
-    def _determine_winner(self, gesture1: HandGestureType, gesture2: HandGestureType) -> RPSRoundResult:
+    def _determine_winner(self, player: RPSGesture, computer: RPSGesture) -> RoundResult:
         """判定勝負"""
-        if gesture1 == gesture2:
-            return RPSRoundResult.DRAW
+        if player == computer:
+            return RoundResult.DRAW
 
         winning_combinations = {
-            (HandGestureType.ROCK, HandGestureType.SCISSORS),
-            (HandGestureType.PAPER, HandGestureType.ROCK),
-            (HandGestureType.SCISSORS, HandGestureType.PAPER)
+            (RPSGesture.ROCK, RPSGesture.SCISSORS),
+            (RPSGesture.PAPER, RPSGesture.ROCK),
+            (RPSGesture.SCISSORS, RPSGesture.PAPER)
         }
 
-        if (gesture1, gesture2) in winning_combinations:
-            return RPSRoundResult.WIN
+        if (player, computer) in winning_combinations:
+            return RoundResult.WIN
         else:
-            return RPSRoundResult.LOSE
+            return RoundResult.LOSE
 
-    def _get_result_message(self, result: RPSRoundResult, player_gesture: HandGestureType, opponent_gesture: HandGestureType) -> str:
-        """獲取結果訊息"""
-        gesture_emoji = {
-            HandGestureType.ROCK: "✊",
-            HandGestureType.PAPER: "✋",
-            HandGestureType.SCISSORS: "✌️"
-        }
-
-        player_emoji = gesture_emoji.get(player_gesture, "❓")
-        opponent_emoji = gesture_emoji.get(opponent_gesture, "❓")
-
-        if result == RPSRoundResult.WIN:
-            return f"你贏了！{player_emoji} 打敗 {opponent_emoji}"
-        elif result == RPSRoundResult.LOSE:
-            return f"你輸了！{opponent_emoji} 打敗 {player_emoji}"
-        else:
-            return f"平手！{player_emoji} vs {opponent_emoji}"
-
-    def _check_game_winner(self) -> bool:
+    def _check_winner(self) -> bool:
         """檢查是否有玩家達到目標分數"""
-        for player in self.players.values():
-            if player.score >= self.target_score:
-                return True
-        return False
+        return self.player_score >= self.target_score or self.computer_score >= self.target_score
 
     def _finish_game(self):
-        """結束遊戲"""
-        self.game_state = RPSGameState.GAME_FINISHED
+        """結束遊戲（單次對決模式）"""
+        self.game_state = GameState.FINISHED
 
-        # 找出獲勝者
-        winner = max(self.players.values(), key=lambda p: p.score)
-        total_time = time.time() - self.game_start_time if self.game_start_time else 0
+        # 🎯 單次對決：根據本回合結果決定訊息
+        result_messages = {
+            RoundResult.WIN: "你贏了！🎉",
+            RoundResult.LOSE: "你輸了！😢",
+            RoundResult.DRAW: "平手！🤝"
+        }
+        message = result_messages.get(self.current_result, "對決結束")
 
-        # 廣播遊戲結束
-        self.status_broadcaster.broadcast_threadsafe({
-            "channel": "rps",
+        self._broadcast({
             "stage": "game_finished",
-            "message": f"遊戲結束！獲勝者：{winner.name}",
+            "message": f"遊戲結束！{message}",
             "data": {
-                "winner": {
-                    "name": winner.name,
-                    "score": winner.score,
-                    "is_ai": winner.is_ai
-                },
-                "final_scores": {pid: p.score for pid, p in self.players.items()},
-                "total_rounds": self.current_round,
-                "total_time": total_time,
-                "round_history": self.round_history
+                "result": self.current_result.value if self.current_result else "unknown",
+                "gestures": {
+                    "player": self.player_gesture.value if self.player_gesture else "unknown",
+                    "computer": self.computer_gesture.value if self.computer_gesture else "unknown"
+                }
             }
         })
 
-        # 等待一段時間後重置
-        time.sleep(3)
-        self.game_state = RPSGameState.IDLE
+        # 不要 sleep，直接設為 IDLE
+        self.game_state = GameState.IDLE
+
+    def _broadcast(self, data: Dict):
+        """廣播訊息到 WebSocket"""
+        message = {
+            "channel": "rps_game",
+            "timestamp": _now_ts(),
+            **data
+        }
+        self.status_broadcaster.broadcast_threadsafe(message)
 
 
-__all__ = ["RPSGameService", "RPSGameMode", "RPSGameDifficulty"]
+__all__ = ["RPSGameService", "GameState", "RoundResult"]

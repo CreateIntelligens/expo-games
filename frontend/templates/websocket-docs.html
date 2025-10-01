@@ -317,49 +317,707 @@ class EmotionStreamClient {
             </div>
         </div>
 
-        <!-- 石頭剪刀布 WebSocket -->
+        <!-- 石頭剪刀布整合式 WebSocket (MediaPipe 版本) -->
         <div class="endpoint-card">
             <div class="endpoint-header" onclick="toggleEndpoint(this)">
                 <div>
                     <span class="endpoint-method">WS</span>
                     <span class="endpoint-url">/ws/rps</span>
-                    <div class="endpoint-description">石頭剪刀布遊戲狀態</div>
+                    <div class="endpoint-description">⭐ 整合式石頭剪刀布遊戲 (MediaPipe 即時串流)</div>
                 </div>
                 <span class="toggle-arrow">▶</span>
             </div>
             <div class="endpoint-content">
                 <div class="section">
                     <h3>📋 功能說明</h3>
-                    <p>即時廣播石頭剪刀布遊戲的狀態和結果。</p>
+                    <p><strong>單一 WebSocket 整合所有功能</strong>：遊戲控制 + 即時影像串流辨識 + 狀態廣播</p>
+                    <p><strong>技術架構</strong>：MediaPipe 即時辨識 + 單一 WebSocket 雙向通訊 + 自動手勢提交</p>
+                    <p><strong>優勢</strong>：開發者只需連線一個端點，簡化整合流程</p>
                 </div>
 
                 <div class="section">
-                    <h3>📥 廣播訊息格式</h3>
+                    <h3>📤 客戶端發送訊息</h3>
 
                     <div class="message-example">
-                        <div class="message-type">回合結果 (Round Result)</div>
+                        <div class="message-type">心跳訊息 (Ping Message)</div>
                         <pre>{
-  "channel": "rps",
-  "type": "round_result",
-  "player_choice": "rock",
-  "ai_choice": "paper",
-  "result": "ai_win",
-  "scores": {"player": 1, "ai": 2},
+  "type": "ping"
+}</pre>
+                        <p><strong>說明</strong>：保持連接活躍的可選訊息</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">遊戲控制 (Game Control)</div>
+                        <pre>{
+  "type": "game_control",
+  "action": "start_game",
+  "target_score": 1
+}</pre>
+                        <p><strong>action 值</strong>：<code>"start_game"</code>, <code>"stop_game"</code></p>
+                        <p><strong>說明</strong>：開始或停止遊戲會話</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">影像幀 (Frame Message)</div>
+                        <pre>{
+  "type": "frame",
+  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ...",
+  "timestamp": 1640995200.123
+}</pre>
+                        <p><strong>說明</strong>：持續發送攝影機幀進行即時手勢辨識，建議 5 FPS</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">手動手勢提交 (Manual Gesture Submit)</div>
+                        <pre>{
+  "type": "submit_gesture",
+  "gesture": "rock",
+  "confidence": 0.85
+}</pre>
+                        <p><strong>說明</strong>：手動提交辨識結果（備用機制）</p>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>📥 服務器回應訊息</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">控制確認 (Control Ack)</div>
+                        <pre>{
+  "type": "control_ack",
+  "action": "start_game",
+  "status": "started",
+  "message": "遊戲已開始"
+}</pre>
+                        <p><strong>說明</strong>：對遊戲控制指令的回應</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">辨識結果 (Recognition Result)</div>
+                        <pre>{
+  "type": "recognition_result",
+  "gesture": "rock",
+  "confidence": 0.96,
+  "timestamp": 1640995200.123,
+  "is_valid": true
+}</pre>
+                        <p><strong>gesture 值</strong>：<code>"rock"</code>, <code>"paper"</code>, <code>"scissors"</code>, <code>"unknown"</code></p>
+                        <p><strong>說明</strong>：即時手勢辨識結果</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">遊戲狀態 (Game State)</div>
+                        <pre>{
+  "type": "game_state",
+  "stage": "waiting_player",
+  "message": "等待玩家出拳",
+  "data": {
+    "round": 1,
+    "scores": {"player": 0, "computer": 0}
+  }
+}</pre>
+                        <p><strong>說明</strong>：遊戲狀態廣播訊息（簡化介面已移除文字提示）</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">錯誤訊息 (Error Message)</div>
+                        <pre>{
+  "type": "error",
+  "message": "辨識失敗",
   "timestamp": 1640995200.123
 }</pre>
                     </div>
 
                     <div class="message-example">
-                        <div class="message-type">遊戲結束 (Game End)</div>
+                        <div class="message-type">心跳回應 (Pong Response)</div>
                         <pre>{
-  "channel": "rps",
-  "type": "game_end",
-  "final_scores": {"player": 2, "ai": 3},
-  "winner": "ai",
-  "duration": 120.5,
+  "type": "pong"
+}</pre>
+                        <p><strong>說明</strong>：對 ping 訊息的回應</p>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🎮 遊戲狀態廣播格式（8 種階段）</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">1️⃣ 遊戲開始 (game_started)</div>
+                        <pre>{
+  "channel": "rps_game",
+  "stage": "game_started",
+  "message": "遊戲開始！目標分數：3",
+  "data": {
+    "target_score": 3,
+    "current_scores": {"player": 0, "computer": 0}
+  },
   "timestamp": 1640995200.123
 }</pre>
                     </div>
+
+                    <div class="message-example">
+                        <div class="message-type">2️⃣ 回合開始 (round_started)</div>
+                        <pre>{
+  "channel": "rps_game",
+  "stage": "round_started",
+  "message": "第 1 回合開始",
+  "data": {
+    "round": 1,
+    "scores": {"player": 0, "computer": 0}
+  },
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">3️⃣ 倒數計時 (countdown)</div>
+                        <pre>{
+  "channel": "rps_game",
+  "stage": "countdown",
+  "message": "倒數: 3",
+  "data": {"count": 3},
+  "timestamp": 1640995200.123
+}</pre>
+                        <p><strong>前端建議</strong>：使用大尺寸數字動畫顯示倒數，參考 CSS 動畫 <code>countdownPulse</code></p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">4️⃣ 等待玩家出拳 (waiting_player)</div>
+                        <pre>{
+  "channel": "rps_game",
+  "stage": "waiting_player",
+  "message": "等待玩家出拳...",
+  "data": {
+    "computer_gesture": "paper",
+    "timeout": 10
+  },
+  "timestamp": 1640995200.123
+}</pre>
+                        <p><strong>說明</strong>：此時電腦已選擇手勢但不顯示，玩家需在 10 秒內透過 <code>/api/rps/submit</code> 提交圖片</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">5️⃣ 回合結果 (result)</div>
+                        <pre>{
+  "channel": "rps_game",
+  "stage": "result",
+  "message": "你贏了！",
+  "data": {
+    "result": "win",
+    "gestures": {
+      "player": "rock",
+      "computer": "scissors"
+    },
+    "scores": {"player": 1, "computer": 0},
+    "round": 1
+  },
+  "timestamp": 1640995200.123
+}</pre>
+                        <p><strong>result 值</strong>：<code>"win"</code>, <code>"lose"</code>, <code>"draw"</code></p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">6️⃣ 遊戲結束 (game_finished)</div>
+                        <pre>{
+  "channel": "rps_game",
+  "stage": "game_finished",
+  "message": "遊戲結束！玩家獲勝！",
+  "data": {
+    "winner": "player",
+    "final_scores": {"player": 3, "computer": 1},
+    "total_rounds": 4,
+    "duration": 45.2
+  },
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">7️⃣ 遊戲停止 (game_stopped)</div>
+                        <pre>{
+  "channel": "rps_game",
+  "stage": "game_stopped",
+  "message": "遊戲已停止",
+  "data": {
+    "reason": "user_request",
+    "final_scores": {"player": 1, "computer": 1}
+  },
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">8️⃣ 錯誤訊息 (error)</div>
+                        <pre>{
+  "channel": "rps_game",
+  "stage": "error",
+  "message": "超時未出拳，本回合判定失敗",
+  "data": {
+    "error_type": "timeout",
+    "round": 2
+  },
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🔗 REST API 配合使用</h3>
+                    <table class="table">
+                        <tr>
+                            <th>端點</th>
+                            <th>方法</th>
+                            <th>說明</th>
+                        </tr>
+                        <tr>
+                            <td><code>/api/rps/start</code></td>
+                            <td>POST</td>
+                            <td>開始遊戲（參數：target_score）</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/rps/stop</code></td>
+                            <td>POST</td>
+                            <td>停止遊戲</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/rps/submit</code></td>
+                            <td>POST</td>
+                            <td>提交玩家手勢圖片（multipart/form-data）</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/rps/status</code></td>
+                            <td>GET</td>
+                            <td>查詢當前遊戲狀態</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="section">
+                    <h3>🎯 遊戲流程圖</h3>
+                    <div class="code-block">IDLE → game_started → round_started → countdown (3→2→1)
+     → waiting_player → [玩家上傳圖片] → result
+     → [重複 round_started...] → game_finished → IDLE</div>
+                </div>
+
+                <div class="section">
+                    <h3>💻 客戶端實作範例</h3>
+                    <div class="code-block">class RPSGameClient {
+    constructor() {
+        this.ws = new WebSocket('ws://localhost:8896/ws/rps');
+        this.setupWebSocket();
+    }
+
+    setupWebSocket() {
+        this.ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.channel !== 'rps_game') return;
+
+            switch(data.stage) {
+                case 'countdown':
+                    this.showCountdown(data.data.count);
+                    break;
+                case 'waiting_player':
+                    this.enableGestureUpload();
+                    break;
+                case 'result':
+                    this.showResult(data.data);
+                    break;
+            }
+        };
+    }
+
+    async submitGesture(imageFile) {
+        const formData = new FormData();
+        formData.append('file', imageFile);
+
+        const response = await fetch('/api/rps/submit', {
+            method: 'POST',
+            body: formData
+        });
+
+        return await response.json();
+    }
+}</div>
+                </div>
+
+                <div class="test-section">
+                    <h4>🧪 互動式測試工具</h4>
+                    <p>完整的測試界面，包含雙 WebSocket 連線管理、遊戲控制、即時串流和互動操作。</p>
+
+                    <!-- WebSocket 連線狀態 -->
+                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 15px; margin-bottom: 20px;">
+                        <div class="input-group">
+                            <label>🎮 整合式 WebSocket (/ws/rps):</label>
+                            <span id="rpsConnectionStatus" style="color: #999;">未連線</span>
+                        </div>
+                    </div>
+
+                    <!-- 主要控制按鈕 -->
+                    <div class="test-controls" style="margin-bottom: 20px;">
+                        <button class="btn btn-primary" id="rpsConnectBtn" onclick="rpsConnect()">🔌 連線整合式 WS</button>
+                        <button class="btn btn-success" id="rpsStartBtn" onclick="rpsStartGame()" disabled>▶️ 開始遊戲</button>
+                        <button class="btn btn-danger" id="rpsStopBtn" onclick="rpsStopGame()" disabled>⏹️ 停止遊戲</button>
+                        <button class="btn btn-warning" id="rpsDisconnectBtn" onclick="rpsDisconnect()" disabled>🔌 斷開連線</button>
+                    </div>
+
+                    <!-- 攝影機控制 -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <h5 style="margin: 0 0 10px 0; color: #333;">📷 攝影機控制</h5>
+                        <div class="test-controls">
+                            <button class="btn btn-secondary" id="rpsCameraStartBtn" onclick="rpsStartCamera()">📹 啟動攝影機</button>
+                            <button class="btn btn-secondary" id="rpsCameraStopBtn" onclick="rpsStopCamera()" disabled>📷 停止攝影機</button>
+                            <button class="btn btn-secondary" id="rpsStreamStartBtn" onclick="rpsStartStreaming()" disabled>🎥 開始串流</button>
+                            <button class="btn btn-secondary" id="rpsStreamStopBtn" onclick="rpsStopStreaming()" disabled>🎬 停止串流</button>
+                        </div>
+                        <div id="rpsCameraPreview" style="margin-top: 10px; display: none;">
+                            <video id="rpsTestVideo" style="max-width: 300px; max-height: 200px; border-radius: 8px; border: 2px solid #ddd;"></video>
+                        </div>
+                    </div>
+
+                    <!-- 遊戲資訊卡片 -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px;">
+                        <div style="padding: 15px; background: #f5f7fa; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">回合</div>
+                            <div id="rpsRound" style="font-size: 24px; font-weight: 700; color: #333;">0</div>
+                        </div>
+                        <div style="padding: 15px; background: #f5f7fa; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">玩家</div>
+                            <div id="rpsPlayerScore" style="font-size: 24px; font-weight: 700; color: #43e97b;">0</div>
+                        </div>
+                        <div style="padding: 15px; background: #f5f7fa; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">電腦</div>
+                            <div id="rpsComputerScore" style="font-size: 24px; font-weight: 700; color: #f5576c;">0</div>
+                        </div>
+                        <div style="padding: 15px; background: #f5f7fa; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">目標</div>
+                            <div id="rpsTargetScore" style="font-size: 24px; font-weight: 700; color: #667eea;">3</div>
+                        </div>
+                    </div>
+
+                    <!-- 圖片上傳區 -->
+                    <div style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">📸 上傳手勢圖片</label>
+                        <input type="file" id="rpsFileInput" accept="image/*" onchange="rpsHandleFileSelect(event)"
+                               style="margin-bottom: 10px;">
+                        <div id="rpsPreview" style="margin-top: 10px; display: none;">
+                            <img id="rpsPreviewImage" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
+                        </div>
+                        <button class="btn btn-success" id="rpsSubmitBtn" onclick="rpsSubmitGesture()" disabled
+                                style="margin-top: 10px;">提交手勢</button>
+                    </div>
+
+                    <!-- 即時手勢辨識顯示 -->
+                    <div style="margin-top: 20px; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; color: white;">
+                        <h5 style="margin: 0 0 10px 0; color: white;">🤖 即時手勢辨識</h5>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center;">
+                            <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 6px;">
+                                <div style="font-size: 12px; opacity: 0.8;">目前手勢</div>
+                                <div id="rpsCurrentGesture" style="font-size: 24px; font-weight: 700;">❓</div>
+                            </div>
+                            <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 6px;">
+                                <div style="font-size: 12px; opacity: 0.8;">信心度</div>
+                                <div id="rpsCurrentConfidence" style="font-size: 24px; font-weight: 700;">0%</div>
+                            </div>
+                            <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 6px;">
+                                <div style="font-size: 12px; opacity: 0.8;">狀態</div>
+                                <div id="rpsGestureStatus" style="font-size: 16px; font-weight: 700;">未辨識</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 測試操作區 -->
+                    <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+                        <h5 style="margin: 0 0 10px 0; color: #856404;">🧪 測試操作</h5>
+                        <div class="test-controls">
+                            <button class="btn btn-info" id="rpsTestGestureBtn" onclick="rpsTestGesture()" disabled>測試手勢辨識</button>
+                            <button class="btn btn-secondary" id="rpsSimulateGestureBtn" onclick="rpsSimulateGesture()" disabled>模擬隨機手勢</button>
+                            <button class="btn btn-warning" id="rpsResetStatsBtn" onclick="rpsResetStats()">重置統計</button>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #856404;">
+                            💡 提示：啟動串流後，手勢辨識結果會即時顯示在上方
+                        </div>
+                    </div>
+
+                    <!-- 倒數顯示 -->
+                    <div id="rpsCountdownDisplay" style="display: none; margin-top: 20px; text-align: center;">
+                        <div style="font-size: 80px; font-weight: 900; color: #667eea; text-shadow: 0 0 20px rgba(102, 126, 234, 0.5); animation: pulse 0.5s ease-in-out;">
+                            <span id="rpsCountdownNumber">3</span>
+                        </div>
+                    </div>
+
+                    <!-- RPS 訊息日誌 -->
+                    <div class="log-area" id="rpsLogArea" style="margin-top: 15px; max-height: 300px; overflow-y: auto;">
+                        <div style="color: #999;">等待連線...</div>
+                    </div>
+                    <button class="btn btn-success" onclick="rpsClearLog()" style="margin-top: 10px;">清空日誌</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 石頭剪刀布串流 WebSocket -->
+        <div class="endpoint-card">
+            <div class="endpoint-header" onclick="toggleEndpoint(this)">
+                <div>
+                    <span class="endpoint-method">WS</span>
+                    <span class="endpoint-url">/ws/rps/stream</span>
+                    <div class="endpoint-description">🎥 石頭剪刀布即時手勢串流 (MediaPipe)</div>
+                </div>
+                <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="endpoint-content">
+                <div class="section">
+                    <h3>📋 功能說明</h3>
+                    <p>即時處理攝影機影像串流，使用 MediaPipe 進行手勢辨識，支援即時遊戲互動。</p>
+                    <p><strong>技術架構</strong>：WebSocket 串流 + MediaPipe 即時辨識 + 信心度過濾</p>
+                </div>
+
+                <div class="section">
+                    <h3>📤 客戶端發送訊息</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">影像幀訊息 (Frame Message)</div>
+                        <pre>{
+  "type": "frame",
+  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ...",
+  "timestamp": 1640995200.123
+}</pre>
+                        <p><strong>說明</strong>：持續發送攝影機幀，建議 5 FPS 進行即時辨識</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">心跳訊息 (Ping Message - 可選)</div>
+                        <pre>{
+  "type": "ping",
+  "timestamp": 1640995200.123
+}</pre>
+                        <p><strong>說明</strong>：可選的心跳保活訊息</p>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>📥 服務器回應訊息</h3>
+
+                    <div class="message-example">
+                        <div class="message-type">辨識結果 (Result Message)</div>
+                        <pre>{
+  "type": "result",
+  "gesture": "rock",
+  "confidence": 0.96,
+  "timestamp": 1640995200.123,
+  "is_valid": true
+}</pre>
+                        <p><strong>gesture 值</strong>：<code>"rock"</code>, <code>"paper"</code>, <code>"scissors"</code>, <code>"unknown"</code></p>
+                        <p><strong>is_valid</strong>：當 gesture 不為 "unknown" 時為 true</p>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">錯誤訊息 (Error Message)</div>
+                        <pre>{
+  "type": "error",
+  "message": "影像解碼失敗",
+  "timestamp": 1640995200.123
+}</pre>
+                    </div>
+
+                    <div class="message-example">
+                        <div class="message-type">心跳回應 (Pong Response)</div>
+                        <pre>"pong"</pre>
+                        <p><strong>說明</strong>：純文本回應，不是 JSON 格式</p>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🔌 連接管理</h3>
+
+                    <h4>連接方式</h4>
+                    <div class="code-block">// 建立串流連接
+const ws = new WebSocket('ws://localhost:8896/ws/rps/stream');
+
+ws.onopen = () => {
+    console.log('串流連接已建立，可以開始發送影像幀');
+    // 開始發送攝影機幀
+    startCameraStreaming();
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'result') {
+        handleGestureResult(data.gesture, data.confidence);
+    }
+};
+</div>
+
+                    <h4>自動重連</h4>
+                    <div class="code-block">ws.onclose = () => {
+    console.log('串流連接已關閉，5秒後重連...');
+    setTimeout(() => {
+        // 重新建立連接
+        setupStreamConnection();
+    }, 5000);
+};
+</div>
+                </div>
+
+                <div class="section">
+                    <h3>⚙️ 效能參數</h3>
+                    <table class="table">
+                        <tr><th>參數</th><th>建議值</th><th>說明</th></tr>
+                        <tr><td>幀率</td><td>5 FPS</td><td>平衡即時性和伺服器負載</td></tr>
+                        <tr><td>影像解析度</td><td>640x480</td><td>適中的解析度，減少網路傳輸</td></tr>
+                        <tr><td>JPEG 品質</td><td>0.7-0.8</td><td>壓縮品質 vs 檔案大小平衡</td></tr>
+                        <tr><td>信心度閾值</td><td>0.5-0.7</td><td>辨識結果的可靠度門檻</td></tr>
+                        <tr><td>網路延遲</td><td>< 200ms</td><td>確保遊戲流暢體驗</td></tr>
+                    </table>
+                </div>
+
+                <div class="section">
+                    <h3>🎮 遊戲整合</h3>
+                    <p>此串流端點專為即時遊戲設計，與 <code>/ws/rps</code> 遊戲控制端點配合使用：</p>
+                    <div class="code-block">// 遊戲整合範例
+class RPSRealtimeGame {
+    constructor() {
+        // 遊戲控制 WebSocket
+        this.gameWs = new WebSocket('ws://localhost:8896/ws/rps');
+
+        // 手勢串流 WebSocket
+        this.streamWs = new WebSocket('ws://localhost:8896/ws/rps/stream');
+
+        this.waitingForGesture = false;
+        this.setupConnections();
+    }
+
+    setupConnections() {
+        // 遊戲控制訊息處理
+        this.gameWs.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.stage === 'waiting_player') {
+                // 開始等待玩家手勢
+                this.waitingForGesture = true;
+                console.log('等待玩家出拳...');
+            }
+        };
+
+        // 串流辨識結果處理
+        this.streamWs.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'result' && this.waitingForGesture) {
+                if (data.confidence > 0.7) {
+                    // 高信心度手勢，自動提交
+                    this.submitGesture(data.gesture);
+                    this.waitingForGesture = false;
+                }
+            }
+        };
+    }
+
+    async submitGesture(gesture) {
+        // 提交辨識結果到遊戲服務
+        const response = await fetch('/api/rps/submit', {
+            method: 'POST',
+            body: formDataWithGestureImage
+        });
+    }
+}</div>
+                </div>
+
+                <div class="section">
+                    <h3>💻 串流客戶端範例</h3>
+                    <div class="code-block">// JavaScript 即時手勢串流範例
+class RPSGestureStreamer {
+    constructor() {
+        this.websocket = null;
+        this.cameraStream = null;
+        this.captureInterval = null;
+        this.isStreaming = false;
+    }
+
+    async startStreaming() {
+        try {
+            // 1. 建立 WebSocket 連接
+            this.websocket = new WebSocket('ws://localhost:8896/ws/rps/stream');
+
+            // 2. 設定訊息處理
+            this.websocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                this.handleStreamResult(data);
+            };
+
+            // 3. 等待連接建立
+            await new Promise((resolve, reject) => {
+                this.websocket.onopen = resolve;
+                this.websocket.onerror = reject;
+            });
+
+            // 4. 啟動攝影機
+            this.cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 640, height: 480 }
+            });
+
+            const videoElement = document.createElement('video');
+            videoElement.srcObject = this.cameraStream;
+            videoElement.play();
+
+            // 5. 開始發送影像幀
+            this.captureInterval = setInterval(() => {
+                this.captureAndSendFrame(videoElement);
+            }, 200); // 5 FPS
+
+            this.isStreaming = true;
+            console.log('🎥 手勢串流已啟動');
+
+        } catch (error) {
+            console.error('啟動串流失敗:', error);
+        }
+    }
+
+    captureAndSendFrame(videoElement) {
+        if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        // 創建畫布並捕獲影像
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoElement, 0, 0, 640, 480);
+
+        // 轉換為 base64
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+        // 發送到伺服器
+        this.websocket.send(JSON.stringify({
+            type: 'frame',
+            image: imageData,
+            timestamp: Date.now() / 1000
+        }));
+    }
+
+    handleStreamResult(data) {
+        if (data.type === 'result') {
+            console.log(`👁️ 即時辨識: ${data.gesture} (${(data.confidence * 100).toFixed(1)}%)`);
+
+            // 更新 UI 顯示
+            this.updateGestureDisplay(data.gesture, data.confidence);
+        }
+    }
+
+    stopStreaming() {
+        this.isStreaming = false;
+
+        if (this.captureInterval) {
+            clearInterval(this.captureInterval);
+            this.captureInterval = null;
+        }
+
+        if (this.cameraStream) {
+            this.cameraStream.getTracks().forEach(track => track.stop());
+        }
+
+        if (this.websocket) {
+            this.websocket.close();
+        }
+    }
+}</div>
                 </div>
             </div>
         </div>

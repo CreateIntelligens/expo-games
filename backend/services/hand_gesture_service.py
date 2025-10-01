@@ -1,12 +1,13 @@
 # =============================================================================
 # hand_gesture_service.py - 手勢識別服務
-# 基於 MediaPipe Hands 實作石頭剪刀布手勢檢測
+# 基於 MediaPipe Tasks GestureRecognizer 實作石頭剪刀布手勢檢測
 # =============================================================================
 
 import logging
 import threading
 import time
 from enum import Enum
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
@@ -19,12 +20,24 @@ _GPU_STATUS = configure_gpu_runtime()
 
 try:
     import mediapipe as mp
+    from mediapipe.tasks.python import BaseOptions
+    from mediapipe.tasks.python.vision import (
+        GestureRecognizer,
+        GestureRecognizerOptions,
+        GestureRecognizerResult,
+        RunningMode,
+    )
     _MEDIAPIPE_AVAILABLE = True
     _MEDIAPIPE_ERROR: Optional[str] = None
 except Exception as exc:
-    mp = SimpleNamespace(solutions=SimpleNamespace(hands=None))
+    mp = SimpleNamespace(
+        solutions=SimpleNamespace(hands=None),
+        Image=object  # 添加 Image 屬性避免錯誤
+    )
     _MEDIAPIPE_AVAILABLE = False
     _MEDIAPIPE_ERROR = str(exc)
+    # Mock missing classes for type hinting
+    GestureRecognizerResult = object
 
 from .status_broadcaster import StatusBroadcaster
 from ..utils.datetime_utils import _now_ts
@@ -50,119 +63,99 @@ class HandGestureType(Enum):
     SCISSORS = "scissors"  # 剪刀 ✌️
     UNKNOWN = "unknown"
 
+# MediaPipe 手勢名稱對應到 RPS 手勢
+GESTURE_MAPPING = {
+    "Closed_Fist": HandGestureType.ROCK,
+    "Open_Palm": HandGestureType.PAPER,
+    "Victory": HandGestureType.SCISSORS,
+    "Thumb_Up": HandGestureType.ROCK,
+    "ILoveYou": HandGestureType.PAPER,
+}
+
 
 class HandGestureDetector:
-    """手勢檢測器，基於 MediaPipe Hands"""
+    """手勢檢測器，基於 MediaPipe Tasks GestureRecognizer"""
 
-    def __init__(self):
+    def __init__(self, service: "HandGestureService"):
+        self.service = service
         self.mediapipe_ready = _MEDIAPIPE_AVAILABLE
         self.init_error: Optional[str] = _MEDIAPIPE_ERROR
-        self.hands = None
+        self.recognizer: Optional[GestureRecognizer] = None
 
         if self.mediapipe_ready:
             try:
-                self.mp_hands = mp.solutions.hands
-                self.hands = self.mp_hands.Hands(
-                    static_image_mode=False,
-                    max_num_hands=1,
-                    min_detection_confidence=0.7,
-                    min_tracking_confidence=0.5
+                model_path = Path(__file__).resolve().parent.parent / "models" / "gesture_recognizer.task"
+                if not model_path.exists():
+                    raise FileNotFoundError(f"模型檔案不存在: {model_path}")
+
+                options = GestureRecognizerOptions(
+                    base_options=BaseOptions(
+                        model_asset_path=str(model_path)
+                        # 舊版 MediaPipe 0.10.11 不支援 delegate 參數
+                    ),
+                    running_mode=RunningMode.LIVE_STREAM,
+                    num_hands=1,
+                    min_hand_detection_confidence=0.5,
+                    min_tracking_confidence=0.5,
+                    result_callback=self._result_callback,
                 )
-                logger.info("MediaPipe Hands 初始化完成，啟用手勢檢測")
+                self.recognizer = GestureRecognizer.create_from_options(options)
+                logger.info("MediaPipe GestureRecognizer 初始化完成（CPU 模式）")
             except Exception as exc:
                 self.mediapipe_ready = False
                 self.init_error = str(exc)
-                logger.exception("初始化 MediaPipe Hands 失敗: %s", exc)
+                logger.exception("初始化 MediaPipe GestureRecognizer 失敗: %s", exc)
         else:
-            logger.warning("MediaPipe Hands 無法使用: %s", self.init_error)
+            logger.warning("MediaPipe GestureRecognizer 無法使用: %s", self.init_error)
+
+    def _result_callback(self, result: GestureRecognizerResult, output_image: 'mp.Image', timestamp_ms: int):
+        """MediaPipe 結果回呼"""
+        if not self.service.is_detecting:
+            return
+
+        gesture = HandGestureType.UNKNOWN
+        confidence = 0.0
+
+        if result.gestures:
+            top_gesture = result.gestures[0][0]
+            gesture = GESTURE_MAPPING.get(top_gesture.category_name, HandGestureType.UNKNOWN)
+            confidence = top_gesture.score
+
+        if gesture != HandGestureType.UNKNOWN and confidence > 0.5:
+            self.service.total_detections += 1
+            self.service.current_gesture = gesture
+            self.service.current_confidence = confidence
+
+            # 手勢穩定性檢測
+            if gesture == self.service.last_stable_gesture:
+                self.service.gesture_stable_count += 1
+            else:
+                self.service.gesture_stable_count = 1
+                self.service.last_stable_gesture = gesture
+
+            # 記錄歷史
+            self.service.gesture_history.append({
+                "gesture": gesture.value,
+                "confidence": round(confidence, 3),
+                "timestamp": time.time(),
+                "stable_count": self.service.gesture_stable_count
+            })
+
+    def recognize_async(self, frame: np.ndarray, timestamp_ms: int):
+        """異步辨識手勢"""
+        if not self.is_available():
+            return
+
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        self.recognizer.recognize_async(mp_image, timestamp_ms)
 
     def is_available(self) -> bool:
         """回傳 MediaPipe 是否可用"""
-        return self.mediapipe_ready and self.hands is not None
+        return self.mediapipe_ready and self.recognizer is not None
 
-    def detect_gesture(self, frame) -> Tuple[HandGestureType, float]:
-        """檢測手勢並返回手勢類型和信心度"""
-        if frame is None or not self.is_available():
-            return HandGestureType.UNKNOWN, 0.0
-
-        # 轉換為 RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.hands.process(frame_rgb)
-
-        if not results.multi_hand_landmarks:
-            return HandGestureType.UNKNOWN, 0.0
-
-        # 獲取第一隻手的關鍵點
-        hand_landmarks = results.multi_hand_landmarks[0]
-        landmarks = [(lm.x, lm.y) for lm in hand_landmarks.landmark]
-
-        # 分析手勢
-        gesture, confidence = self._classify_gesture(landmarks)
-        return gesture, confidence
-
-    def _classify_gesture(self, landmarks: List[Tuple[float, float]]) -> Tuple[HandGestureType, float]:
-        """根據關鍵點分類手勢"""
-        if len(landmarks) != 21:
-            return HandGestureType.UNKNOWN, 0.0
-
-        # MediaPipe 手部關鍵點索引
-        # 拇指: 4, 食指: 8, 中指: 12, 無名指: 16, 小指: 20
-        # 指根: 拇指3, 食指6, 中指10, 無名指14, 小指18
-
-        thumb_tip = landmarks[4]
-        thumb_ip = landmarks[3]
-        index_tip = landmarks[8]
-        index_pip = landmarks[6]
-        middle_tip = landmarks[12]
-        middle_pip = landmarks[10]
-        ring_tip = landmarks[16]
-        ring_pip = landmarks[14]
-        pinky_tip = landmarks[20]
-        pinky_pip = landmarks[18]
-
-        # 計算手指是否伸直
-        fingers_up = []
-
-        # 拇指 (比較特殊，需要看 x 座標)
-        if thumb_tip[0] > thumb_ip[0]:  # 右手
-            fingers_up.append(thumb_tip[0] > thumb_ip[0])
-        else:  # 左手
-            fingers_up.append(thumb_tip[0] < thumb_ip[0])
-
-        # 其他四指 (比較 y 座標，tip 在 pip 上方表示伸直)
-        fingers_up.append(index_tip[1] < index_pip[1])
-        fingers_up.append(middle_tip[1] < middle_pip[1])
-        fingers_up.append(ring_tip[1] < ring_pip[1])
-        fingers_up.append(pinky_tip[1] < pinky_pip[1])
-
-        # 計算伸直的手指數量
-        fingers_count = sum(fingers_up)
-
-        # 手勢分類邏輯
-        confidence = 0.8  # 基礎信心度
-
-        if fingers_count == 0:
-            # 所有手指收起 = 石頭
-            return HandGestureType.ROCK, confidence
-
-        elif fingers_count == 5:
-            # 所有手指伸直 = 布
-            return HandGestureType.PAPER, confidence
-
-        elif fingers_count == 2 and fingers_up[1] and fingers_up[2]:
-            # 食指和中指伸直 = 剪刀
-            return HandGestureType.SCISSORS, confidence
-
-        else:
-            # 其他情況，降低信心度
-            if fingers_count <= 1:
-                return HandGestureType.ROCK, confidence * 0.6
-            elif fingers_count >= 4:
-                return HandGestureType.PAPER, confidence * 0.6
-            elif fingers_count == 2:
-                return HandGestureType.SCISSORS, confidence * 0.5
-            else:
-                return HandGestureType.UNKNOWN, confidence * 0.3
+    def close(self):
+        if self.recognizer:
+            self.recognizer.close()
 
 
 class HandGestureService:
@@ -170,11 +163,11 @@ class HandGestureService:
 
     def __init__(self, status_broadcaster: StatusBroadcaster):
         self.status_broadcaster = status_broadcaster
-        self.gesture_detector = HandGestureDetector()
+        self.gesture_detector = HandGestureDetector(self)
 
         if not self.gesture_detector.is_available():
             logger.error(
-                "MediaPipe Hands 未啟用，手勢識別功能將不可用: %s",
+                "MediaPipe GestureRecognizer 未啟用，手勢識別功能將不可用: %s",
                 self.gesture_detector.init_error,
             )
 
@@ -184,16 +177,19 @@ class HandGestureService:
         self.camera = None
 
         # 檢測統計
-        self.detection_start_time = None
+        self.detection_start_time: Optional[float] = None
         self.total_detections = 0
-        self.gesture_history = []
+        self.gesture_history: List[Dict] = []
         self.current_gesture = HandGestureType.UNKNOWN
         self.current_confidence = 0.0
+        self.gesture_stable_count = 0
+        self.last_stable_gesture = HandGestureType.UNKNOWN
+        self.last_broadcast_time = 0
 
     def start_gesture_detection(self, duration: Optional[int] = None) -> Dict:
         """開始手勢檢測"""
         if not self.gesture_detector.is_available():
-            error_msg = self.gesture_detector.init_error or "MediaPipe Hands 初始化失敗"
+            error_msg = self.gesture_detector.init_error or "MediaPipe GestureRecognizer 初始化失敗"
             return {
                 "status": "error",
                 "message": f"無法啟動手勢檢測: {error_msg}",
@@ -219,6 +215,9 @@ class HandGestureService:
             self.gesture_history = []
             self.current_gesture = HandGestureType.UNKNOWN
             self.current_confidence = 0.0
+            self.gesture_stable_count = 0
+            self.last_stable_gesture = HandGestureType.UNKNOWN
+            self.last_broadcast_time = 0
 
             # 開始檢測線程
             self.is_detecting = True
@@ -263,6 +262,8 @@ class HandGestureService:
 
         if self.detection_thread:
             self.detection_thread.join(timeout=2)
+        
+        self.gesture_detector.close()
 
         # 生成最終報告
         total_time = time.time() - self.detection_start_time if self.detection_start_time else 0
@@ -321,11 +322,6 @@ class HandGestureService:
 
     def _detection_loop(self, duration: Optional[int] = None):
         """檢測循環 (在背景線程中運行)"""
-        frame_count = 0
-        last_broadcast_time = 0
-        gesture_stable_count = 0
-        last_stable_gesture = HandGestureType.UNKNOWN
-
         if self.detection_start_time is None:
             self.detection_start_time = time.time()
 
@@ -338,57 +334,31 @@ class HandGestureService:
                 ret, frame = self.camera.read()
                 if not ret:
                     break
+                
+                timestamp_ms = int(time.time() * 1000)
+                self.gesture_detector.recognize_async(frame, timestamp_ms)
 
-                frame_count += 1
-
-                # 每2幀檢測一次，但首幀也執行確保快速反應
-                if frame_count == 1 or frame_count % 2 == 0:
-                    # 檢測手勢
-                    gesture, confidence = self.gesture_detector.detect_gesture(frame)
-
-                    if gesture != HandGestureType.UNKNOWN and confidence > 0.5:
-                        self.total_detections += 1
-
-                        # 更新當前手勢
-                        self.current_gesture = gesture
-                        self.current_confidence = confidence
-
-                        # 手勢穩定性檢測
-                        if gesture == last_stable_gesture:
-                            gesture_stable_count += 1
-                        else:
-                            gesture_stable_count = 1
-                            last_stable_gesture = gesture
-
-                        # 記錄歷史
-                        self.gesture_history.append({
-                            "gesture": gesture.value,
-                            "confidence": round(confidence, 3),
-                            "timestamp": time.time(),
-                            "stable_count": gesture_stable_count
+                # 定期廣播結果 (每秒)
+                current_time = time.time()
+                if current_time - self.last_broadcast_time >= 1.0:
+                    if self.current_gesture != HandGestureType.UNKNOWN:
+                        self.status_broadcaster.broadcast_threadsafe({
+                            "channel": "gesture",
+                            "stage": "detecting",
+                            "message": f"檢測到手勢: {self.current_gesture.value}",
+                            "data": {
+                                "current_gesture": self.current_gesture.value,
+                                "confidence": round(self.current_confidence, 3),
+                                "detection_count": self.total_detections,
+                                "detection_duration": current_time - self.detection_start_time,
+                                "stable_count": self.gesture_stable_count,
+                                "is_stable": self.gesture_stable_count >= 3
+                            }
                         })
-
-                        # 定期廣播結果 (每秒)
-                        current_time = time.time()
-                        if current_time - last_broadcast_time >= 1.0:
-                            self.status_broadcaster.broadcast_threadsafe({
-                                "channel": "gesture",
-                                "stage": "detecting",
-                                "message": f"檢測到手勢: {gesture.value}",
-                                "data": {
-                                    "current_gesture": gesture.value,
-                                    "confidence": round(confidence, 3),
-                                    "detection_count": self.total_detections,
-                                    "detection_duration": current_time - self.detection_start_time,
-                                    "stable_count": gesture_stable_count,
-                                    "is_stable": gesture_stable_count >= 3
-                                }
-                            })
-
-                            last_broadcast_time = current_time
+                    self.last_broadcast_time = current_time
 
                 # 控制幀率
-                time.sleep(1/30)  # 30 FPS
+                time.sleep(1/60)
 
         except Exception as exc:
             self.status_broadcaster.broadcast_threadsafe({
