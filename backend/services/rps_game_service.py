@@ -63,7 +63,7 @@ class RPSGameService:
         # 遊戲設定
         self.countdown_time = 3  # 倒數秒數
         self.result_display_time = 3  # 結果顯示時間
-        self.target_score = 3  # 目標分數
+        self.target_score = 1  # 目標分數
 
         # 玩家資料
         self.player_score = 0
@@ -79,8 +79,13 @@ class RPSGameService:
         # 遊戲統計
         self.game_start_time: Optional[float] = None
 
-    def start_game(self, target_score: int = 3) -> Dict:
-        """開始遊戲"""
+    def start_game(self, target_score: int = 1) -> Dict:
+        """
+        開始遊戲（單回合模式）
+
+        Args:
+            target_score: 保留為 API 相容性，實際上遊戲固定為單回合模式
+        """
         if self.game_state != GameState.IDLE:
             return {"status": "error", "message": "遊戲已在進行中"}
 
@@ -90,8 +95,8 @@ class RPSGameService:
                 "message": f"MediaPipe 辨識器不可用: {self.detector.init_error}"
             }
 
-        # 重置遊戲狀態
-        self.target_score = target_score
+        # 重置遊戲狀態（固定為單回合模式，target_score 不實際使用）
+        self.target_score = 1  # 固定為 1，不使用傳入的 target_score
         self.player_score = 0
         self.computer_score = 0
         self.current_round = 0
@@ -312,7 +317,7 @@ class RPSGameService:
             "data": {}
         })
 
-        # 等待玩家透過 API 提交手勢（最多等待 10 秒）
+        # 等待玩家透過 WebSocket 自動設定手勢（最多等待 10 秒）
         wait_time = 0
         max_wait = 10
 
@@ -323,14 +328,11 @@ class RPSGameService:
             time.sleep(0.5)
             wait_time += 0.5
 
-        # 如果超時，隨機給一個手勢
+        # 🎯 如果超時且沒有偵測到手勢，不要隨機給手勢
+        # 前端會發送 no_gesture_detected 訊息，設定為 UNKNOWN
         if self.player_gesture is None:
-            self.player_gesture = random.choice([
-                RPSGesture.ROCK,
-                RPSGesture.PAPER,
-                RPSGesture.SCISSORS
-            ])
-            logger.warning("玩家超時，隨機分配手勢: %s", self.player_gesture.value)
+            logger.warning("⏰ 等待超時，未偵測到玩家手勢")
+            # 不做任何事，等待前端發送 no_gesture_detected
 
         return True
 
@@ -363,15 +365,20 @@ class RPSGameService:
         """顯示結果"""
         self.game_state = GameState.RESULT
 
-        result_messages = {
-            RoundResult.WIN: "你贏了！🎉",
-            RoundResult.LOSE: "你輸了！😢",
-            RoundResult.DRAW: "平手！🤝"
-        }
+        # 🎯 特殊處理：如果玩家是 UNKNOWN，顯示特殊訊息
+        if self.player_gesture == RPSGesture.UNKNOWN:
+            result_message = "不能亂比！😡"
+        else:
+            result_messages = {
+                RoundResult.WIN: "你贏了！🎉",
+                RoundResult.LOSE: "你輸了！😢",
+                RoundResult.DRAW: "平手！🤝"
+            }
+            result_message = result_messages[self.current_result]
 
         self._broadcast({
             "stage": "result",
-            "message": result_messages[self.current_result],
+            "message": result_message,
             "data": {
                 "result": self.current_result.value,
                 "gestures": {
@@ -390,7 +397,11 @@ class RPSGameService:
         # 前端會處理 3 秒顯示延遲
 
     def _determine_winner(self, player: RPSGesture, computer: RPSGesture) -> RoundResult:
-        """判定勝負"""
+        """判定勝負（UNKNOWN 手勢判輸 - 不能亂比）"""
+        # 🎯 處理 UNKNOWN 手勢：玩家亂比或未偵測到手勢，判定輸
+        if player == RPSGesture.UNKNOWN:
+            return RoundResult.LOSE
+
         if player == computer:
             return RoundResult.DRAW
 
@@ -414,12 +425,15 @@ class RPSGameService:
         self.game_state = GameState.FINISHED
 
         # 🎯 單次對決：根據本回合結果決定訊息
-        result_messages = {
-            RoundResult.WIN: "你贏了！🎉",
-            RoundResult.LOSE: "你輸了！😢",
-            RoundResult.DRAW: "平手！🤝"
-        }
-        message = result_messages.get(self.current_result, "對決結束")
+        if self.player_gesture == RPSGesture.UNKNOWN:
+            message = "不能亂比！😡"
+        else:
+            result_messages = {
+                RoundResult.WIN: "你贏了！🎉",
+                RoundResult.LOSE: "你輸了！😢",
+                RoundResult.DRAW: "平手！🤝"
+            }
+            message = result_messages.get(self.current_result, "對決結束")
 
         self._broadcast({
             "stage": "game_finished",
@@ -443,6 +457,7 @@ class RPSGameService:
             "timestamp": _now_ts(),
             **data
         }
+        logger.info("📡 廣播遊戲狀態: stage=%s", data.get("stage"))
         self.status_broadcaster.broadcast_threadsafe(message)
 
 

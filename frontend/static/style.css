@@ -498,6 +498,107 @@ body {
     gap: 1.2rem;
 }
 
+.control-card {
+    position: relative;
+    border-radius: var(--radius-lg);
+    padding: 1.8rem 1.65rem;
+    background: linear-gradient(145deg, rgba(110, 69, 226, 0.28), rgba(20, 18, 35, 0.92));
+    border: 1px solid rgba(136, 211, 206, 0.18);
+    box-shadow: 0 24px 48px rgba(22, 17, 54, 0.35);
+    overflow: hidden;
+}
+
+.control-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 85% 20%, rgba(136, 211, 206, 0.18), transparent 55%);
+    pointer-events: none;
+}
+
+.control-card__header {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.control-card__title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.control-card__title h3 {
+    margin: 0;
+    font-size: 1.45rem;
+    letter-spacing: 0.01em;
+}
+
+.control-card__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-muted);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.control-card__copy {
+    position: relative;
+    margin: 0;
+    color: rgba(245, 245, 255, 0.78);
+    line-height: 1.6;
+    max-width: 430px;
+}
+
+.control-card__actions {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+}
+
+.live-indicator {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: background 0.2s ease, border 0.2s ease, color 0.2s ease;
+}
+
+.live-dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.live-indicator.active {
+    background: rgba(136, 211, 206, 0.18);
+    border-color: rgba(136, 211, 206, 0.35);
+    color: var(--secondary);
+}
+
+.live-indicator.active .live-dot {
+    background: var(--secondary);
+    box-shadow: 0 0 0 4px rgba(136, 211, 206, 0.25);
+}
+
 .form-group {
     display: flex;
     flex-direction: column;

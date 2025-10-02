@@ -165,7 +165,7 @@
 }
 
 /* RPS 倒數畫面樣式 */
-/* RPS 倒數覆蓋層樣式已移至 rps-game.css，使用並排佈局而非全螢幕覆蓋 */
+/* RPS 倒數覆蓋層樣式已移至 rps.css，使用並排佈局而非全螢幕覆蓋 */
 
 @keyframes fadeIn {
     from { opacity: 0; }

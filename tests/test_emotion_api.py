@@ -2,6 +2,7 @@
 # test_emotion_api.py - 情緒分析API端點測試
 # =============================================================================
 # 測試情緒分析相關的API端點，包括檔案上傳、預覽功能、進度更新等
+# Updated for new FastAPI router architecture with service injection
 # =============================================================================
 
 import pytest

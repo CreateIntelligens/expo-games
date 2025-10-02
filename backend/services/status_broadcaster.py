@@ -72,8 +72,12 @@ class StatusBroadcaster:
         Args:
             message (Dict[str, Any]): 要廣播的消息字典
         """
+        import logging
+        logger = logging.getLogger(__name__)
         async with self._lock:
             dead = []
+            conn_count = len(self._connections)
+            logger.info(f"📢 廣播訊息到 {conn_count} 個連接: channel={message.get('channel')}, stage={message.get('stage')}")
             for queue in list(self._connections):
                 try:
                     queue.put_nowait(message)

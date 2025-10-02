@@ -1,6 +1,6 @@
 """
 Drawing API Router
-AI 畫布相關的 API 端點
+畫布相關的 API 端點
 """
 
 from typing import TYPE_CHECKING

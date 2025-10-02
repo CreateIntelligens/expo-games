@@ -1,71 +1,37 @@
 # Expo Games Interactive Platform
 
-面向展場或互動體驗中心的模組化 AI 遊戲平台，結合情緒辨識、動作偵測、手勢對戰與創意畫畫等功能。系統目標是以單一部署套件提供後端 API、WebSocket 即時互動、前端控制台與 Nginx HTTPS 入口，便於快速布署於現場設備或雲端。
+Modular AI-powered interactive gaming platform with emotion recognition, gesture detection, and real-time multiplayer capabilities.
 
-## 🎮 主要功能
+## Features
 
-### 情緒分析模組 (Emotion Studio)
-- **多模態分析**：支援圖片、影片、即時攝影機輸入
-- **雙引擎支援**：MediaPipe (468點臉部網格) + DeepFace (深度學習特徵)
-- **即時檢測**：WebSocket 推播情緒狀態變化
-- **詳細報告**：情緒分布、信心度、特徵分析、趨勢統計
+- **Emotion Analysis**: Real-time facial emotion detection using MediaPipe + DeepFace
+- **Action Detection**: Interactive pose/action recognition games
+- **RPS Gesture Game**: Real-time rock-paper-scissors with MediaPipe hand tracking
+- **AI Drawing**: Gesture-controlled virtual painting with shape recognition
+- **WebSocket Real-time**: Bidirectional communication for live interactions
+- **Docker Deployment**: Single-command containerized deployment with HTTPS
 
-### 動作檢測遊戲 (Action Arena)
-- **互動挑戰**：微笑、轉頭、挑眉、眨眼等動作識別
-- **三種難度**：簡單(3個動作)、中等(5個動作)、困難(7個動作)
-- **即時回饋**：進度條顯示、動作完成提示
-- **遊戲化體驗**：計分系統、完成統計
+## Tech Stack
 
-### 石頭剪刀布對戰 (RPS Duel Stage) ⭐ **NEW - MediaPipe 版本**
-- **MediaPipe 手勢識別**：使用 Google MediaPipe 預訓練模型，高精度手勢辨識
-- **圖片上傳模式**：玩家上傳手勢照片，系統精準辨識石頭✊、布✋、剪刀✌️
-- **電腦隨機對戰**：電腦隨機出拳，公平對決
-- **即時動畫效果**：3...2...1 倒數動畫、勝負特效（勝利脈衝、失敗震動、平手閃爍）
-- **WebSocket 即時更新**：遊戲狀態、回合進度、結果即時推播
-- **輕量高效**：完全獨立運作，不依賴外部服務
-- **戰績統計**：回合記錄、勝負統計、遊戲時長追蹤
+- **Backend**: FastAPI, MediaPipe, DeepFace, OpenCV, TensorFlow
+- **Frontend**: Vanilla JavaScript, WebSocket API, Canvas API
+- **Infrastructure**: Docker, Nginx, SSL/TLS, GPU acceleration
+- **AI/ML**: MediaPipe Solutions, DeepFace, TensorFlow Serving
 
-### AI 繪畫識別 (Sketch Lab)
-- **虛擬繪畫**：用手指在空中繪畫，生成虛擬畫布
-- **手勢控制**：
-  - 食指單獨伸出 = 繪畫
-  - 雙指（食指+中指）在頂部 15% 區域 = 選擇顏色
-  - 雙指在畫布區域 = 橡皮擦
-  - 四指伸出 = 清空畫布
-- **顏色選擇**：4 種基礎顏色（黑、紅、藍、綠），通過手勢在畫面頂部選擇
-- **AI 識別**：智慧識別繪畫內容（圓形、方形、三角形、心形等）
-- **透明輸出**：結束繪畫後輸出透明背景的 PNG 圖片，方便後續使用
-- **即時反饋**：自動識別、建議提示、信心度評估
-- **WebSocket 即時**：20 FPS 即時手勢追蹤和畫布更新
+## Quick Start
 
-### 系統架構特色
-- **容器化部署**：Docker + docker-compose 一鍵啟動
-- **HTTPS 支持**：Nginx 反向代理 + 自動 SSL 憑證生成
-- **響應式設計**：支援桌面和移動設備
-- **WebSocket 通訊**：即時狀態推播和互動更新
+### Prerequisites
+- Docker & Docker Compose
+- Camera device (for real-time features)
 
-## 🚀 快速開始
-
-### 環境需求
-- Docker 和 Docker Compose
-- 攝影機設備（用於即時檢測功能）
-
-### 啟動系統
-
+### Launch
 ```bash
-# 克隆專案
 git clone <repository-url>
 cd expo-games
-
-# 啟動所有服務（自動建置 + 背景運行）
 docker compose up -d --build
 ```
 
-### 訪問應用
-- **主應用**: https://localhost:8896
-- **健康檢查**: https://localhost:8896/health
-
-系統啟動後，Nginx 會自動生成自簽 SSL 憑證，並提供 HTTPS 訪問。
+Access: https://localhost:8896 (auto-generates self-signed SSL)
 
 ## 📁 專案結構
 
@@ -82,8 +48,8 @@ expo-games/
 │   │   ├── action_detection_service.py # 動作檢測遊戲服務
 │   │   ├── drawing_service.py         # AI 繪畫服務 (WebSocket)
 │   │   ├── hand_gesture_service.py    # 手勢識別服務 (MediaPipe)
-│   │   ├── mediapipe_rps_detector.py  # ⭐ MediaPipe 手勢辨識器
-│   │   ├── rps_game_service.py        # ⭐ 石頭剪刀布遊戲服務 (MediaPipe 版本)
+│   │   ├── mediapipe_rps_detector.py  # MediaPipe 手勢辨識器
+│   │   ├── rps_game_service.py        # 猜拳遊戲服務 (MediaPipe 版本)
 │   │   └── status_broadcaster.py      # WebSocket 狀態推播
 │   └── utils/
 │       ├── datetime_utils.py          # 時間工具函數
@@ -96,8 +62,8 @@ expo-games/
 │       ├── style.css          # 基礎樣式
 │       ├── css/
 │       │   ├── emotion_action.css     # 頁面專用樣式
-│       │   ├── gesture-drawing.css    # 手勢繪畫樣式
-│       │   └── rps-game.css           # ⭐ 猜拳遊戲樣式 + 動畫
+│       │   ├── drawing.css            # 手勢繪畫樣式
+│       │   └── rps.css           # 猜拳遊戲樣式 + 動畫
 │       └── js/
 │           ├── emotion_action.js      # 互動邏輯和 WebSocket 通訊
 │           └── modules/
@@ -108,12 +74,12 @@ expo-games/
 │               ├── emotion-realtime.js    # 情緒即時分析入口
 │               ├── action-upload.js       # 動作檔案上傳模組
 │               ├── action-game.js         # 動作遊戲模組
-│               ├── rps-game.js            # ⭐ 石頭剪刀布遊戲模組 (MediaPipe + WebSocket)
-│               └── gesture-drawing.js     # 手勢繪畫入口
-│       └── assets/gestures/               # ⭐ 猜拳遊戲素材
-│           ├── rock.png                   # 石頭圖片
-│           ├── paper.png                  # 布圖片
-│           └── scissors.png               # 剪刀圖片
+│               ├── rps-game.js            #  猜拳遊戲模組 (MediaPipe + WebSocket)
+│               └── modules/drawing/       # 手勢繪畫模組
+│       └── assets/rps/                    # 猜拳遊戲素材
+│           ├── rock.jpg                   # 石頭圖片
+│           ├── paper.jpg                  # 布圖片
+│           └── scissors.jpg               # 剪刀圖片
 ├── nginx/                     # Nginx 反向代理配置
 │   ├── nginx.conf            # 主配置文件
 │   ├── default.conf.template # 虛擬主機模板（支持環境變數）
@@ -189,202 +155,69 @@ CORS_ALLOW_ORIGINS=*        # 允許的跨域來源
 - **Docker**: 容器化部署和隔離
 - **SSL/TLS**: 自動憑證生成和 HTTPS 加密
 
-## 📊 API 參考
+## API Reference
 
-### 情緒分析 API
-
+### Emotion Analysis
 ```http
-# 圖片分析 API
-POST /api/emotion/analyze              # 完整分析上傳的圖片/影片
-POST /api/emotion/analyze/simple       # DeepFace 簡化分析 (推薦使用)
-POST /api/emotion/analyze/deepface      # DeepFace 完整分析
-
-# WebSocket 即時分析
-WS   /ws/emotion                # WebSocket即時情緒檢測
-
-# 簡化 API 回傳格式範例
-{
-  "emotion_zh": "開心",
-  "emotion_en": "happy",
-  "emoji": "😊",
-  "confidence": 0.85
-}
+POST /api/emotion/analyze              # Full analysis (MediaPipe + DeepFace)
+POST /api/emotion/analyze/simple       # Simplified DeepFace analysis
+POST /api/emotion/analyze/deepface      # DeepFace only
+WS   /ws/emotion                       # Real-time emotion detection
 ```
 
-### 動作檢測 API
-
+### Action Detection
 ```http
-POST /api/action/start      # 開始動作檢測遊戲
-POST /api/action/stop       # 停止遊戲
-GET  /api/action/status     # 獲取遊戲狀態
+POST /api/action/start                 # Start action game
+POST /api/action/stop                  # Stop game
+GET  /api/action/status                # Get game status
 ```
 
-### 石頭剪刀布 API ⭐ **MediaPipe 版本**
-
+### RPS Game (MediaPipe)
 ```http
-POST /api/rps/start         # 開始石頭剪刀布遊戲
-POST /api/rps/submit        # ⭐ 提交玩家手勢圖片 (MediaPipe 辨識)
-POST /api/rps/stop          # 停止遊戲
-GET  /api/rps/status        # 獲取遊戲狀態
-
-# 範例：提交手勢
-curl -X POST http://localhost:8896/api/rps/submit \
-  -F "file=@my_hand_gesture.jpg"
-
-# 回應範例
-{
-  "status": "success",
-  "gesture": "rock",
-  "confidence": 0.95
-}
+WS   /ws/rps                           # Real-time game updates
 ```
 
-📋 **完整 API 文檔**: 請參考 [`docs/RPS_API.md`](docs/RPS_API.md)
-
-### 手勢識別 API
-
+### Gesture Recognition
 ```http
-POST /api/gesture/start     # 啟動手勢檢測
-POST /api/gesture/stop      # 停止手勢檢測
-GET  /api/gesture/status    # 獲取檢測狀態
-GET  /api/gesture/current   # 獲取當前手勢
+POST /api/gesture/start                # Start gesture detection
+POST /api/gesture/stop                 # Stop detection
+GET  /api/gesture/status               # Get detection status
+GET  /api/gesture/current              # Get current gesture
 ```
 
-### AI 繪畫 API
-
+### AI Drawing
 ```http
-POST /api/drawing/start     # 開始繪畫會話
-POST /api/drawing/stop      # 停止繪畫會話
-GET  /api/drawing/status    # 獲取繪畫狀態
-POST /api/drawing/recognize # 手動識別繪畫
-POST /api/drawing/clear     # 清空畫布
+POST /api/drawing/start                # Start drawing session
+POST /api/drawing/stop                 # Stop session
+GET  /api/drawing/status               # Get drawing status
+POST /api/drawing/recognize            # Manual shape recognition
+POST /api/drawing/clear                # Clear canvas
+WS   /ws/drawing                       # Real-time drawing updates
 ```
 
-### WebSocket 端點
+See [`docs/RPS_API.md`](docs/RPS_API.md) and [`docs/websocket-protocol.md`](docs/websocket-protocol.md) for detailed specs.
 
-```
-WS /ws/emotion              # 情緒檢測即時更新
-WS /ws/action               # 動作遊戲即時更新
-WS /ws/rps                  # 石頭剪刀布遊戲即時更新
-WS /ws/gesture              # 手勢識別即時更新
-WS /ws/drawing              # AI 繪畫即時更新
-WS /ws/drawing/gesture      # 手勢繪畫即時處理 (20 FPS)
-```
+## Development
 
-📋 **詳細 WebSocket 協議說明**: 請參考 [`docs/websocket-protocol.md`](docs/websocket-protocol.md)
-
-## 🔧 開發指南
-
-### 本地開發
-
+### Local Development
 ```bash
-# 安裝 Python 依賴
 pip install -r requirements.txt
-
-# 設定環境變數
 export PYTHONPATH="/path/to/expo-games"
-
-# 啟動 FastAPI 開發服務器
 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8896
 ```
 
-### 運行測試
-
+### Testing
 ```bash
-# 運行所有測試
 pytest tests/
-
-# 運行特定服務測試
-pytest tests/test_status_broadcaster.py
-pytest tests/test_emotion_service.py
-pytest tests/test_action_detection_service.py
-pytest tests/test_hand_gesture_service.py
-pytest tests/test_rps_game_service.py
-pytest tests/test_drawing_service.py
 ```
 
-### Docker 開發
-
+### Docker Development
 ```bash
-# 驗證配置
-docker compose config
-
-# 查看日誌
 docker compose logs -f
-
-# 重新建置
 docker compose up -d --build
-
-# 停止所有服務
 docker compose down
 ```
 
-## 🎯 展場部署建議
+## License
 
-1. **硬體要求**
-   - CPU: 4核心以上（MediaPipe 計算密集）
-   - RAM: 4GB 以上
-   - 攝影機: USB 網路攝影機
-   - 網路: 支援 HTTPS 的穩定連線
-
-2. **生產環境配置**
-   - 替換 `nginx/ssl/` 中的自簽憑證為正式 SSL 憑證
-   - 調整 `CORS_ALLOW_ORIGINS` 限制跨域訪問
-   - 設定防火牆只開放必要端口
-
-3. **監控和維護**
-   - 查看容器狀態: `docker compose ps`
-   - 監控系統資源使用情況
-   - 定期備份配置和日誌
-
-## 🔧 故障排除
-
-### WebSocket 連接問題
-
-1. **"Unsupported message type" 錯誤**
-   - 確認前後端支援的消息類型一致
-   - 檢查 WebSocket 協議版本
-
-2. **連接頻繁斷開**
-   - 檢查網路穩定性
-   - 確認心跳機制正常運作
-   - 查看服務端 Docker 日誌: `docker compose logs -f`
-
-3. **手勢繪畫延遲**
-   - 降低攝影機幀率
-   - 檢查系統 CPU/GPU 使用率
-   - 優化圖片壓縮品質
-
-## 🔮 擴展規劃
-
-- **多人對戰**: 雙人石頭剪刀布、團隊競賽模式
-- **更多 AI 識別**: 文字識別、物體檢測、創意畫作分析
-- **數據持久化**: 遊戲統計分析和歷史記錄
-- **多語言支持**: 國際化展場適配
-- **CI/CD 流程**: 自動化測試和部署
-- **性能優化**: GPU 加速、快取機制、模型優化
-
-## 📚 參考資源
-
-### AI 技術實現參考
-- **手勢繪畫**: https://steam.oxxostudio.tw/category/python/ai/ai-mediapipe-finger-draw.html
-- **虛擬畫家**: https://github.com/MohamedAlaouiMhamdi/AI_virtual_Painter
-- **⭐ MediaPipe 猜拳**: https://github.com/google/mediapipe (已整合)
-- **手勢遊戲**: https://github.com/ChetanNair/Rock-Paper-Scissors
-- **微笑照片**: https://steam.oxxostudio.tw/category/python/ai/ai-smile-photo.html
-- **DeepFace**: https://github.com/serengil/deepface
-- **姿勢估計**: https://steam.oxxostudio.tw/category/python/ai/ai-mediapipe-pose.html
-- **MediaPipe**: https://github.com/google/mediapipe
-
-### 專案文檔
-- **⭐ 猜拳 API 文檔**: [`docs/RPS_API.md`](docs/RPS_API.md)
-- **WebSocket 協議**: [`docs/websocket-protocol.md`](docs/websocket-protocol.md)
-- **架構規格**: [`docs/architecture-spec.md`](docs/architecture-spec.md)
-
-## 📄 授權
-
-此專案採用與原始專案相同的授權條款。
-
----
-
-🎮 **Expo Games Interactive Platform** - 讓每一場展覽都成為難忘的互動體驗！
+See original project license.

@@ -248,10 +248,10 @@ class TestWebSocketTransportIntegration:
         """
         # 預期的協議端點
         protocol_endpoints = [
-            '/ws/drawing/gesture',      # 手勢繪畫
+            '/ws/drawing',      # 手勢繪畫
             '/ws/emotion',              # 情緒分析
             '/ws/action',               # 動作檢測
-            '/ws/rps',                  # 石頭剪刀布
+            '/ws/rps',                  # 猜拳
             '/ws/gesture'               # 一般手勢
         ]
         
@@ -262,7 +262,6 @@ class TestWebSocketTransportIntegration:
         }
         
         assert len(protocol_endpoints) == 5
-        assert '/ws/drawing/gesture' in protocol_endpoints
         
         print("✅ WebSocketTransport 協議兼容性驗證通過")
 

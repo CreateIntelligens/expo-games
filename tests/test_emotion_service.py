@@ -61,3 +61,52 @@ class TestEmotionService:
         assert result["emotion_zh"] == "開心"
         assert result["confidence"] == 0.99
         assert result["engine"] == "deepface"
+
+    @patch('backend.services.emotion_service.DeepFace')
+    def test_analyze_video_deepface_stream_success(self, mock_deepface, emotion_service):
+        # Mock the stream generator
+        def mock_stream_generator(video_path, frame_interval):
+            yield {
+                "emotion_zh": "開心",
+                "emotion_en": "happy",
+                "emoji": "😊",
+                "confidence": 0.89,
+                "frame_time": 0.5,
+                "progress": 25,
+                "completed": False
+            }
+            yield {
+                "message": "影片分析完成",
+                "total_frames": 2,
+                "progress": 100,
+                "completed": True
+            }
+
+        with patch.object(emotion_service, 'analyze_video_deepface_stream', side_effect=mock_stream_generator):
+            results = list(emotion_service.analyze_video_deepface_stream("fake_video.mp4", 0.5))
+            assert len(results) == 2
+            assert results[0]["emotion_zh"] == "開心"
+            assert results[1]["completed"] is True
+
+    @patch('cv2.imread')
+    def test_analyze_image_simple_success(self, mock_imread, emotion_service):
+        mock_imread.return_value = MagicMock()  # Mock image array
+        emotion_service.feature_extractor.extract_features.return_value = {"some_feature": 1}
+        emotion_service.emotion_detector.detect_emotion.return_value = (EmotionType.NEUTRAL, 0.5)
+
+        result = emotion_service.analyze_image_simple("fake_path.jpg")
+        assert result["emotion_zh"] == "面無表情"
+        assert result["emotion_en"] == "neutral"
+        assert result["confidence"] == 0.5
+
+    def test_analyze_video_simple_success(self, emotion_service):
+        # Mock the full analyze_video method
+        with patch.object(emotion_service, 'analyze_video') as mock_analyze_video:
+            mock_analyze_video.return_value = {
+                "dominant_emotion": "開心",
+                "confidence_average": 0.85
+            }
+
+            result = emotion_service.analyze_video_simple("fake_video.mp4")
+            assert result["emotion_zh"] == "開心"
+            assert result["confidence"] == 0.85

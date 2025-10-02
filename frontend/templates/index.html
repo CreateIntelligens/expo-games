@@ -7,8 +7,8 @@
     <title>{{ title }}</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/css/common.css">
-    <link rel="stylesheet" href="/static/css/gesture-drawing.css">
-    <link rel="stylesheet" href="/static/css/rps-game.css">
+    <link rel="stylesheet" href="/static/css/drawing.css">
+    <link rel="stylesheet" href="/static/css/rps.css">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
 </head>
@@ -24,8 +24,8 @@
                 <div class="console-modes">
                     <button type="button" class="chip mode-btn active" data-mode="emotion">情緒分析</button>
                     <button type="button" class="chip mode-btn" data-mode="action">動作偵測</button>
-                    <button type="button" class="chip mode-btn" data-mode="rps">石頭剪刀布</button>
-                    <button type="button" class="chip mode-btn" data-mode="drawing">AI 畫布</button>
+                    <button type="button" class="chip mode-btn" data-mode="rps">猜拳</button>
+                    <button type="button" class="chip mode-btn" data-mode="drawing">畫布</button>
                 </div>
             </div>
         </section>
@@ -39,13 +39,13 @@
                         <p>一次支援圖片、影片、即時攝影機的多模態偵測。</p>
                     </div>
                     <div class="tabs analysis-tabs">
-                        <button class="tab-btn active" data-tab="upload">📁 上傳分析</button>
-                        <button class="tab-btn" data-tab="webcam">📹 攝影機分析</button>
+                        <button class="tab-btn" data-tab="upload">📁 上傳分析</button>
+                        <button class="tab-btn active" data-tab="webcam">📹 攝影機分析</button>
                     </div>
                 </header>
 
                 <div class="panel-body">
-                    <div class="tab-content active" id="upload-tab">
+                    <div class="tab-content" id="upload-tab">
                         <form id="emotion-upload-form" method="post" enctype="multipart/form-data" class="upload-form">
                             <div class="dropzone" id="emotion-drop-zone">
                                 <div class="dropzone-copy">
@@ -100,11 +100,24 @@
                         </div>
                     </div>
 
-                    <div class="tab-content" id="webcam-tab">
+                    <div class="tab-content active" id="webcam-tab">
                         <div class="realtime-controls">
-                            <div class="control-buttons">
-                                <button type="button" class="btn primary" id="start-emotion-btn">開始情緒檢測</button>
-                                <button type="button" class="btn secondary" id="stop-emotion-btn" disabled>停止檢測</button>
+                            <div class="control-card">
+                                <div class="control-card__header">
+                                    <div class="control-card__title">
+                                        <span class="control-card__pill">Webcam Mode</span>
+                                        <h3>即時情緒檢測</h3>
+                                    </div>
+                                    <div class="live-indicator" id="emotion-live-indicator">
+                                        <span class="live-dot"></span>
+                                        <span class="live-label" id="emotion-live-indicator-label">待命</span>
+                                    </div>
+                                </div>
+                                <p class="control-card__copy">使用攝影機即時偵測情緒，分析結果會即時顯示於下方儀表板。</p>
+                                <div class="control-buttons control-card__actions">
+                                    <button type="button" class="btn primary" id="start-emotion-btn">開始情緒檢測</button>
+                                    <button type="button" class="btn ghost" id="stop-emotion-btn" disabled>停止檢測</button>
+                                </div>
                             </div>
                         </div>
 
@@ -270,7 +283,7 @@
                 <header class="panel-header">
                     <div>
                         <span class="panel-tag">RPS Duel Stage</span>
-                        <h2>石頭剪刀布對戰</h2>
+                        <h2>猜拳對戰</h2>
                         <p>用手勢進行剪刀石頭布遊戲，挑戰不同難度的 AI 對手。</p>
                     </div>
                 </header>
@@ -326,8 +339,8 @@
                 <header class="panel-header">
                     <div>
                         <span class="panel-tag">Sketch Lab</span>
-                        <h2>AI 繪畫識別</h2>
-                        <p>用手指在空中繪畫，讓 AI 猜猜你畫的是什麼。</p>
+                        <h2>繪畫識別</h2>
+                        <p>用手指在空中繪畫。</p>
                     </div>
                 </header>
 

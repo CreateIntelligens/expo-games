@@ -16,6 +16,15 @@ from ..utils.gpu_runtime import configure_gpu_runtime
 
 _GPU_STATUS = configure_gpu_runtime()
 
+# DeepFace 模型快取路徑設定 — 預設放在專案內的 models/deepface
+# 在開發環境中使用相對路徑，在 Docker 中使用絕對路徑
+if os.path.exists('/app'):  # Docker 環境
+    _DEFAULT_DEEPFACE_HOME = os.environ.get('DEEPFACE_HOME', '/app/models/deepface')
+else:  # 本地開發環境
+    _DEFAULT_DEEPFACE_HOME = os.environ.get('DEEPFACE_HOME', os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'models', 'deepface'))
+os.environ['DEEPFACE_HOME'] = _DEFAULT_DEEPFACE_HOME
+os.makedirs(os.path.join(_DEFAULT_DEEPFACE_HOME, 'weights'), exist_ok=True)
+
 # MediaPipe 依賴初始化（GPU 加速設定在 backend.utils.gpu_runtime 中處理）
 try:  # pragma: no cover - 匯入狀態依賴執行環境
     import mediapipe as mp
@@ -1052,6 +1061,23 @@ class EmotionService:
             # 導入 TensorFlow 用於記憶體管理
             import tensorflow as tf
 
+            # 先用 MediaPipe 進行快速臉部檢查（若可用）
+            preview_image = None
+            if self.feature_extractor.is_available():
+                preview_image = cv2.imread(image_path)
+                if preview_image is not None:
+                    preview_features = self.feature_extractor.extract_features(preview_image, static_image=True)
+                    if not preview_features:
+                        return {
+                            "emotion_zh": "沒分析到臉",
+                            "emotion_en": "not_detected",
+                            "emoji": "🙈",
+                            "confidence": 0.0,
+                            "error": "未偵測到臉部特徵",
+                            "engine": "mediapipe",
+                            "face_detected": False
+                        }
+
             analyze_kwargs = dict(
                 img_path=image_path,
                 actions=['emotion'],
@@ -1068,9 +1094,9 @@ class EmotionService:
             # DeepFace 返回一個列表，每個元素是一張臉的分析結果
             if not analysis or not isinstance(analysis, list) or len(analysis) == 0:
                 return {
-                    "emotion_zh": "未檢測到",
+                    "emotion_zh": "沒分析到臉",
                     "emotion_en": "not_detected",
-                    "emoji": "❓",
+                    "emoji": "🙈",
                     "confidence": 0.0,
                     "error": "未檢測到人臉",
                     "engine": "deepface",
@@ -1083,9 +1109,9 @@ class EmotionService:
             # 檢查是否有有效的臉部檢測結果
             if 'dominant_emotion' not in result or 'emotion' not in result:
                 return {
-                    "emotion_zh": "未檢測到",
+                    "emotion_zh": "沒分析到臉",
                     "emotion_en": "not_detected",
-                    "emoji": "❓",
+                    "emoji": "🙈",
                     "confidence": 0.0,
                     "error": "臉部檢測失敗",
                     "engine": "deepface",
@@ -1099,9 +1125,9 @@ class EmotionService:
             all_emotions_low = all(score <= 1.0 for score in result['emotion'].values())  # 1%以下算作未檢測
             if confidence <= 0.01 or all_emotions_low:  # 信心度小於1%或所有情緒都很低
                 return {
-                    "emotion_zh": "未檢測到",
+                    "emotion_zh": "沒分析到臉",
                     "emotion_en": "not_detected",
-                    "emoji": "❓",
+                    "emoji": "🙈",
                     "confidence": 0.0,
                     "error": "未檢測到有效的人臉特徵",
                     "engine": "deepface",
@@ -1109,13 +1135,13 @@ class EmotionService:
                 }
 
             # 英文轉中文
-            emotion_zh = "面無表情" # 預設值
-            for zh, details in EMOTION_TRANSLATIONS.items():
+            emotion_zh = "面無表情"  # 預設值
+            emoji = "😐"
+            for zh_key, details in EMOTION_TRANSLATIONS.items():
                 if details['en'] == dominant_emotion_en:
-                    emotion_zh = zh
+                    emotion_zh = details.get('zh') or zh_key
+                    emoji = details.get('emoji', emoji)
                     break
-
-            emoji = EMOTION_TRANSLATIONS.get(emotion_zh, {}).get("emoji", "😐")
 
             # 取得其他特徵分析結果
             age = result.get('age', 0)

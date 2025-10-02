@@ -49,4 +49,4 @@ RUN pip install --upgrade pip \
 EXPOSE 8896
 
 # 啟動 FastAPI 應用程式
-CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8896"]
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8896", "--reload"]

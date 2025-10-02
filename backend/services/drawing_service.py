@@ -1,5 +1,5 @@
 # =============================================================================
-# drawing_service.py - AI 畫布識別服務
+# drawing_service.py - 畫布識別服務
 # 基於 MediaPipe 和手勢追蹤的虛擬繪畫和 AI 圖像識別系統
 # =============================================================================
 
@@ -478,7 +478,7 @@ class ShapeRecognizer:
 
 
 class DrawingService:
-    """AI 畫布識別服務主類"""
+    """畫布識別服務主類"""
 
     def __init__(self, status_broadcaster: StatusBroadcaster):
         self.status_broadcaster = status_broadcaster
@@ -574,7 +574,7 @@ class DrawingService:
             self.status_broadcaster.broadcast_threadsafe({
                 "channel": "drawing",
                 "stage": "started",
-                "message": "AI 畫布會話已開始",
+                "message": "畫布會話已開始",
                 "data": {
                     "mode": mode,
                     "color": color,

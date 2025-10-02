@@ -1,0 +1,24 @@
+{
+  "name": "expo-games-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Frontend for Expo Games - AI Interactive Experience Platform",
+  "scripts": {
+    "lint": "eslint static/js/**/*.js",
+    "lint:fix": "eslint static/js/**/*.js --fix",
+    "format": "prettier --write 'static/js/**/*.js'",
+    "format:check": "prettier --check 'static/js/**/*.js'",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
+  },
+  "devDependencies": {
+    "@vitest/ui": "^1.0.0",
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.1.1",
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "jsdom": "^23.0.0"
+  }
+}

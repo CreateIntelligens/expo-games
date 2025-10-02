@@ -65,7 +65,6 @@ async def websocket_rps(websocket: WebSocket) -> None:
     - 心跳保活: {"type": "ping"}
     - 遊戲控制: {"type": "game_control", "action": "start_game", "target_score": 3}
     - 影像串流: {"type": "frame", "image": "data:image/jpeg;base64,...", "timestamp": 123.45}
-    - 手動提交: {"type": "submit_gesture", "gesture": "rock", "confidence": 0.85}
 
     服務器回應訊息格式:
     - 辨識結果: {"type": "recognition_result", "gesture": "rock", "confidence": 0.96, "is_valid": true}
@@ -107,16 +106,34 @@ async def websocket_rps(websocket: WebSocket) -> None:
             # 取消未完成的任務
             for task in pending:
                 task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
             # 處理完成的任務
             for task in done:
+                # 檢查任務是否因為 disconnect 而失敗
+                if task.exception() is not None:
+                    exc = task.exception()
+                    if isinstance(exc, (RuntimeError, WebSocketDisconnect)):
+                        if "disconnect" in str(exc).lower() or "not connected" in str(exc).lower():
+                            logger.info("WebSocket 連接已斷開")
+                            raise WebSocketDisconnect()
+                    # 如果是 broadcast_task 的錯誤，不要繼續循環
+                    if task == broadcast_task:
+                        logger.warning("廣播任務出錯: %s (可能連接已斷開)", exc)
+                        raise WebSocketDisconnect()
+                    logger.exception("任務執行錯誤: %s", exc)
+                    continue
+
                 try:
                     result = task.result()
 
                     # 如果是來自客戶端的訊息（receive_json）
                     if task == receive_task:
                         message_type = result.get("type", "")
-                        logger.debug("[RPS WS] 收到訊息類型: %s", message_type)
+                        logger.info("[RPS WS] 收到訊息類型: %s", message_type)
 
                         # 處理心跳
                         if message_type == "ping":
@@ -148,6 +165,12 @@ async def websocket_rps(websocket: WebSocket) -> None:
                                 gesture, confidence = rps_game_service.detector.detect(img)
 
                                 # 🎯 自動設定玩家手勢（遊戲等待中 + 有效手勢 + 信心度 > 60%）
+                                logger.info("[RPS WS] 遊戲狀態檢查: game_state=%s, gesture=%s, confidence=%.1f%%, player_gesture=%s",
+                                           rps_game_service.game_state.value if rps_game_service.game_state else "None",
+                                           gesture.value,
+                                           confidence * 100,
+                                           rps_game_service.player_gesture.value if rps_game_service.player_gesture else "None")
+
                                 if (rps_game_service.game_state == GameState.WAITING_PLAYER and
                                     gesture != RPSGesture.UNKNOWN and
                                     confidence > 0.6 and
@@ -206,42 +229,21 @@ async def websocket_rps(websocket: WebSocket) -> None:
                                     "message": f"未知的遊戲控制指令: {action}"
                                 })
 
-                        elif message_type == "submit_gesture":
-                            gesture_value = result.get("gesture")
-                            confidence = float(result.get("confidence", 0))
-                            if not gesture_value:
-                                await websocket.send_json({
-                                    "type": "error",
-                                    "message": "缺少手勢資料"
-                                })
-                                continue
+                        elif message_type == "no_gesture_detected":
+                            # 處理「未偵測到手勢」的情況
+                            unknown_confidence = float(result.get("unknown_confidence", 0))
+                            logger.info("[RPS WS] 未偵測到有效手勢，unknown 信心度: %.1f%%", unknown_confidence * 100)
 
-                            try:
-                                gesture_enum = RPSGesture(gesture_value)
-                            except ValueError:
-                                await websocket.send_json({
-                                    "type": "error",
-                                    "message": f"無效的手勢: {gesture_value}"
-                                })
-                                continue
+                            # 設定玩家手勢為 UNKNOWN（讓遊戲可以繼續）
+                            if rps_game_service.game_state == GameState.WAITING_PLAYER:
+                                rps_game_service.player_gesture = RPSGesture.UNKNOWN
+                                logger.info("✅ 設定玩家手勢為 UNKNOWN，遊戲繼續")
 
-                            if rps_game_service.game_state != GameState.WAITING_PLAYER:
-                                await websocket.send_json({
-                                    "type": "error",
-                                    "message": "目前不接受手勢提交"
-                                })
-                                continue
-
-                            rps_game_service.player_gesture = gesture_enum
-                            logger.info("[RPS WS] submit_gesture: %s (%.1f%%)", gesture_value, confidence * 100)
                             await websocket.send_json({
-                                "type": "control_ack",
-                                "action": "submit_gesture",
-                                "status": "accepted",
-                                "gesture": gesture_value,
-                                "confidence": confidence
+                                "type": "gesture_set",
+                                "gesture": "unknown",
+                                "message": "未偵測到手勢，遊戲繼續"
                             })
-
 
                         else:
                             # 不支援的訊息類型
@@ -262,10 +264,10 @@ async def websocket_rps(websocket: WebSocket) -> None:
                             logger.debug("[RPS WS] 推播遊戲狀態: %s", game_message.get("stage"))
                             await websocket.send_json(game_message)
 
-                except RuntimeError as e:
-                    if "WebSocket is not connected" in str(e):
+                except (RuntimeError, WebSocketDisconnect) as e:
+                    if "disconnect" in str(e).lower() or "WebSocket is not connected" in str(e):
                         logger.info("WebSocket 連接已斷開，停止處理訊息")
-                        break
+                        raise WebSocketDisconnect()
                     else:
                         logger.exception("處理訊息錯誤: %s", e)
                 except Exception as e:
@@ -310,35 +312,6 @@ async def websocket_gesture(websocket: WebSocket) -> None:
 
 
 @router.websocket("/ws/drawing")
-async def websocket_drawing(websocket: WebSocket) -> None:
-    """
-    WebSocket endpoint for real-time drawing and AI recognition updates.
-
-    Establishes a persistent WebSocket connection to stream drawing session
-    and AI recognition results in real-time. Clients receive live updates as
-    drawings are created and recognized.
-
-    Args:
-        websocket (WebSocket): The WebSocket connection instance.
-
-    Note:
-        Connection automatically handles cleanup on client disconnect.
-        Only drawing-related messages are forwarded to this endpoint.
-    """
-    await websocket.accept()
-    queue = await status_broadcaster.register()
-    try:
-        while True:
-            message = await queue.get()
-            if message.get("channel") == "drawing":
-                await websocket.send_json(message)
-    except WebSocketDisconnect:
-        pass
-    finally:
-        await status_broadcaster.unregister(queue)
-
-
-@router.websocket("/ws/drawing/gesture")
 async def websocket_drawing_gesture(websocket: WebSocket) -> None:
     """
     WebSocket endpoint for real-time gesture-based drawing.

@@ -1,6 +1,6 @@
 # =============================================================================
 # hand_gesture_service.py - 手勢識別服務
-# 基於 MediaPipe Tasks GestureRecognizer 實作石頭剪刀布手勢檢測
+# 基於 MediaPipe Tasks GestureRecognizer 實作猜拳手勢檢測
 # =============================================================================
 
 import logging

@@ -1,48 +1,124 @@
+# =============================================================================
+# docker-compose.yml - AI 互動遊戲展場 Docker Compose 配置
+# =============================================================================
+# 此配置定義了完整的容器化部署環境，包含主應用程式和反向代理服務。
+# 支援 GPU 加速、攝影機設備映射和 SSL 終止。
+
+version: '3.8'
+
 services:
+  # =============================================================================
+  # 主應用程式服務 - AI 互動遊戲平台
+  # =============================================================================
   expo-games-app:
+    # 從當前目錄建置 Docker 映像檔
     build: .
+    # 映像檔標籤
     image: expo-games-service:latest
+    # 容器名稱
     container_name: expo-games-app
+
+    # 環境變數配置
     env_file:
       - .env
+
+    # 掛載卷 - 開發模式下掛載程式碼以支援熱重載
     volumes:
       - .:/app
+
+    # 設備映射 - 將主機攝影機設備映射到容器內
     devices:
       - /dev/video0:/dev/video0  # 攝影機設備映射
+
+    # 內部網路端口暴露
     expose:
       - "${APP_PORT:-8896}"
+
+    # 容器環境變數
     environment:
       - APP_PORT=${APP_PORT:-8896}
-      - CUDA_VISIBLE_DEVICES=0
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
+      - CUDA_VISIBLE_DEVICES=0              # 指定使用的 CUDA 裝置
+      - TF_FORCE_GPU_ALLOW_GROWTH=true     # 啟用 TensorFlow GPU 記憶體動態增長
+
+    # 重啟策略
     restart: unless-stopped
-    privileged: true  # 給予特權模式以訪問硬件設備
+
+    # 特權模式 - 允許容器訪問主機硬件設備
+    privileged: true
+
+    # GPU 資源配置
     deploy:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+            - driver: nvidia      # NVIDIA GPU 驅動
+              count: 1           # 使用 1 個 GPU
+              capabilities: [gpu] # GPU 功能
 
+  # =============================================================================
+  # 反向代理服務 - Nginx SSL 終止和靜態檔案服務
+  # =============================================================================
   expo-games-proxy:
+    # 使用輕量級 Nginx Alpine 映像檔
     image: nginx:alpine
+    # 容器名稱
     container_name: expo-games-proxy
+
+    # 依賴關係 - 確保主應用程式先啟動
     depends_on:
       - expo-games-app
+
+    # 環境變數配置
     env_file:
       - .env
+
+    # 外部端口映射 - 將容器端口映射到主機
     ports:
-      - "${EXTERNAL_PORT:-8896}:443"
+      - "${EXTERNAL_PORT:-8896}:443"  # HTTPS 端口
+
+    # 掛載卷 - Nginx 配置和 SSL 憑證
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/default.conf.template:/etc/nginx/conf.d/default.conf.template:ro
-      - ./nginx/ssl:/etc/nginx/ssl
-      - ./nginx/generate-ssl.sh:/docker-entrypoint.d/01-generate-ssl.sh:ro
-      - ./nginx/substitute-env.sh:/docker-entrypoint.d/02-substitute-env.sh:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro                              # 主配置檔案
+      - ./nginx/default.conf.template:/etc/nginx/conf.d/default.conf.template:ro # 站點配置模板
+      - ./nginx/ssl:/etc/nginx/ssl                                              # SSL 憑證目錄
+      - ./nginx/generate-ssl.sh:/docker-entrypoint.d/01-generate-ssl.sh:ro      # SSL 生成腳本
+      - ./nginx/substitute-env.sh:/docker-entrypoint.d/02-substitute-env.sh:ro  # 環境變數替換腳本
+
+    # 啟動命令 - 執行環境變數替換腳本
     command: ["/docker-entrypoint.d/02-substitute-env.sh"]
+
+    # 重啟策略
     restart: unless-stopped
 
+# =============================================================================
+# 網路配置
+# =============================================================================
 networks:
   default:
+    # 自訂網路名稱
     name: expo-games_default
+
+# =============================================================================
+# 使用說明
+# =============================================================================
+#
+# 啟動服務:
+#   docker-compose up -d
+#
+# 停止服務:
+#   docker-compose down
+#
+# 查看日誌:
+#   docker-compose logs -f
+#
+# 重建映像檔:
+#   docker-compose build --no-cache
+#
+# GPU 支援:
+# - 確保主機已安裝 NVIDIA Docker 支援
+# - nvidia-docker2 或 nvidia-container-toolkit
+#
+# 環境變數:
+# - APP_PORT: 應用程式內部端口 (預設: 8896)
+# - EXTERNAL_PORT: 外部訪問端口 (預設: 8896)
+# - CUDA_VISIBLE_DEVICES: 指定 GPU 裝置

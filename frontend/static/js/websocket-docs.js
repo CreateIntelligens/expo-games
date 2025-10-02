@@ -217,10 +217,18 @@ function rpsConnect() {
     rpsWebSocket = new WebSocket(wsUrl);
 
     rpsWebSocket.onopen = () => {
-        document.getElementById('rpsConnectionStatus').textContent = '✅ 已連線';
-        document.getElementById('rpsConnectionStatus').style.color = '#43e97b';
-        document.getElementById('rpsConnectBtn').disabled = true;
-        document.getElementById('rpsStartBtn').disabled = false;
+        const statusEl = document.getElementById('rpsConnectionStatus');
+        const connectBtn = document.getElementById('rpsConnectBtn');
+        const disconnectBtn = document.getElementById('rpsDisconnectBtn');
+        const startBtn = document.getElementById('rpsStartBtn');
+
+        if (statusEl) {
+            statusEl.textContent = '✅ 已連線';
+            statusEl.style.color = '#43e97b';
+        }
+        if (connectBtn) connectBtn.disabled = true;
+        if (disconnectBtn) disconnectBtn.disabled = false;
+        if (startBtn) startBtn.disabled = false;
         rpsLog('🎮 整合式 WebSocket 連線成功', 'success');
     };
 
@@ -238,11 +246,20 @@ function rpsConnect() {
     };
 
     rpsWebSocket.onclose = () => {
-        document.getElementById('rpsConnectionStatus').textContent = '🔴 已斷線';
-        document.getElementById('rpsConnectionStatus').style.color = '#f5576c';
-        document.getElementById('rpsConnectBtn').disabled = false;
-        document.getElementById('rpsStartBtn').disabled = true;
-        document.getElementById('rpsStopBtn').disabled = true;
+        const statusEl = document.getElementById('rpsConnectionStatus');
+        const connectBtn = document.getElementById('rpsConnectBtn');
+        const disconnectBtn = document.getElementById('rpsDisconnectBtn');
+        const startBtn = document.getElementById('rpsStartBtn');
+        const stopBtn = document.getElementById('rpsStopBtn');
+
+        if (statusEl) {
+            statusEl.textContent = '🔴 已斷線';
+            statusEl.style.color = '#f5576c';
+        }
+        if (connectBtn) connectBtn.disabled = false;
+        if (disconnectBtn) disconnectBtn.disabled = true;
+        if (startBtn) startBtn.disabled = true;
+        if (stopBtn) stopBtn.disabled = true;
         rpsStopStreaming();
         rpsLog('🔌 整合式 WebSocket 連線已關閉', 'warning');
     };
@@ -338,36 +355,45 @@ function rpsHandleMessage(data) {
 }
 
 /**
- * 開始遊戲
+ * 開始遊戲（透過 WebSocket）
  */
 async function rpsStartGame() {
     try {
-        const formData = new FormData();
-        formData.append('target_score', 3);
+        if (!rpsWebSocket || rpsWebSocket.readyState !== WebSocket.OPEN) {
+            rpsLog('請先連接 WebSocket', 'error');
+            return;
+        }
 
-        const response = await fetch('/api/rps/start', {
-            method: 'POST',
-            body: formData
-        });
+        const message = {
+            type: 'game_control',
+            action: 'start_game',
+            target_score: 1
+        };
 
-        const result = await response.json();
-        rpsLog('開始遊戲: ' + JSON.stringify(result), 'api');
+        rpsWebSocket.send(JSON.stringify(message));
+        rpsLog('發送開始遊戲指令: ' + JSON.stringify(message), 'sent');
     } catch (error) {
         rpsLog('開始遊戲錯誤: ' + error.message, 'error');
     }
 }
 
 /**
- * 停止遊戲
+ * 停止遊戲（透過 WebSocket）
  */
 async function rpsStopGame() {
     try {
-        const response = await fetch('/api/rps/stop', {
-            method: 'POST'
-        });
+        if (!rpsWebSocket || rpsWebSocket.readyState !== WebSocket.OPEN) {
+            rpsLog('請先連接 WebSocket', 'error');
+            return;
+        }
 
-        const result = await response.json();
-        rpsLog('停止遊戲: ' + JSON.stringify(result), 'api');
+        const message = {
+            type: 'game_control',
+            action: 'stop_game'
+        };
+
+        rpsWebSocket.send(JSON.stringify(message));
+        rpsLog('發送停止遊戲指令: ' + JSON.stringify(message), 'sent');
     } catch (error) {
         rpsLog('停止遊戲錯誤: ' + error.message, 'error');
     }
@@ -398,47 +424,6 @@ function rpsHandleFileSelect(event) {
     reader.readAsDataURL(file);
 
     rpsLog('已選擇檔案: ' + file.name, 'info');
-}
-
-/**
- * 提交手勢
- */
-async function rpsSubmitGesture() {
-    if (!rpsSelectedFile) {
-        rpsLog('請先選擇圖片', 'error');
-        return;
-    }
-
-    try {
-        const formData = new FormData();
-        formData.append('file', rpsSelectedFile);
-
-        rpsLog('正在上傳並辨識...', 'info');
-
-        const response = await fetch('/api/rps/submit', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            const emoji = {
-                'rock': '✊',
-                'paper': '✋',
-                'scissors': '✌️'
-            }[result.gesture] || '❓';
-
-            rpsLog(
-                `辨識成功: ${result.gesture} ${emoji} (${(result.confidence * 100).toFixed(1)}%)`,
-                'success'
-            );
-        } else {
-            rpsLog('辨識失敗: ' + result.message, 'error');
-        }
-    } catch (error) {
-        rpsLog('提交手勢錯誤: ' + error.message, 'error');
-    }
 }
 
 /**
@@ -624,27 +609,6 @@ function rpsTestGesture() {
         type: 'frame',
         image: testImage,
         timestamp: Date.now() / 1000
-    }));
-}
-
-/**
- * 模擬隨機手勢
- */
-function rpsSimulateGesture() {
-    if (!rpsWebSocket || rpsWebSocket.readyState !== WebSocket.OPEN) {
-        rpsLog('❌ WebSocket 未連接', 'error');
-        return;
-    }
-
-    const gestures = ['rock', 'paper', 'scissors'];
-    const randomGesture = gestures[Math.floor(Math.random() * gestures.length)];
-
-    rpsLog(`🎲 模擬手勢提交: ${randomGesture}`, 'info');
-
-    rpsWebSocket.send(JSON.stringify({
-        type: 'submit_gesture',
-        gesture: randomGesture,
-        confidence: 0.85
     }));
 }
 

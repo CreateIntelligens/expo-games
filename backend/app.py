@@ -27,7 +27,7 @@ from .services.status_broadcaster import StatusBroadcaster
 from .utils.gpu_runtime import get_gpu_status_dict
 
 # Import all routers
-from .routers import emotion, action, rps, hand_gesture, drawing, websockets
+from .routers import emotion, action, hand_gesture, drawing, websockets
 
 
 # Project directory structure setup
@@ -95,7 +95,6 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 emotion.init_router(emotion_service)
 action.init_router(action_service)
 hand_gesture.init_router(hand_gesture_service)
-rps.init_router(rps_game_service)
 drawing.init_router(drawing_service)
 websockets.init_router(
     rps_service=rps_game_service,
@@ -112,7 +111,6 @@ websockets.init_router(
 app.include_router(emotion.router)
 app.include_router(action.router)
 app.include_router(hand_gesture.router)
-app.include_router(rps.router)
 app.include_router(drawing.router)
 app.include_router(websockets.router)
 
@@ -142,9 +140,9 @@ async def render_emotion_page(request: Request) -> HTMLResponse:
         200
     """
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "title": APP_TITLE,
             "max_file_size_mb": MAX_UPLOAD_SIZE_BYTES // (1024 * 1024),
         },
@@ -171,9 +169,9 @@ async def render_websocket_docs(request: Request) -> HTMLResponse:
         200
     """
     return templates.TemplateResponse(
+        request,
         "websocket-docs.html",
         {
-            "request": request,
             "title": f"{APP_TITLE} - WebSocket API 文檔",
         },
     )
